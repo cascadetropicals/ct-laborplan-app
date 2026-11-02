@@ -761,7 +761,32 @@ function mTeam(){
  const tabs=`<div class="seg" style="align-self:flex-start">${[['people',L('Personas y puestos','People & jobs')],['rec',L('Tareas recurrentes','Recurring tasks')]].map(t=>`<button class="${S.teamTab===t[0]?'on':''}" data-act="teamTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>`;
  if(S.teamTab==='rec')return tabs+recEditor();
  return tabs+`<div class="team-grid"><div class="plist">${P.map(q=>`<button class="${q.id===S.teamSel?'on':''}" data-act="teamSel" data-p="${q.id}"><span><b>${q.name}</b><br><span class="muted" style="font-size:12px">${L(jt(q.job,'es'),jt(q.job,'en'))}</span></span>${chip(q.home)}</button>`).join('')}</div>
- <div class="card"><div class="row-between" style="margin-bottom:8px"><span class="muted">${roleLabel(p)} · ${L('Descansa','Day off')}: ${p.rest.map(r=>dShort(addDays('2026-10-11',r)).replace(/\s?\d+$/,'')).join(', ')}</span><button class="btn sm" data-act="toast" data-msg="${L('Personas y puestos se editan en las pestañas App People y App Jobs de la hoja.','People and jobs are edited in the App People and App Jobs tabs of the sheet.')}">${L('Editar','Edit')}</button></div>${jobView(p.job)}</div></div>`;
+ <div class="card"><div class="row-between" style="margin-bottom:8px"><span class="muted">${roleLabel(p)} · ${L('Descansa','Day off')}: ${p.rest.map(r=>dShort(addDays('2026-10-11',r)).replace(/\s?\d+$/,'')).join(', ')||'—'}${p.satWork?' · '+L('Trabaja sábado','Works Saturday'):''}</span><button class="btn sm" data-act="teamEdit">${S.teamEdit?L('Cancelar','Cancel'):L('Editar','Edit')}</button></div>${S.teamEdit?teamForm(p):jobView(p.job)}</div></div>`;
+}
+function teamForm(p){
+ const DN=[1,2,3,4,5,6],dl=w=>fD(addDays('2026-10-11',w),{weekday:'short'}).replace('.',''),hasJob=!!JOBS[p.job];
+ const opt=(v,t,cur)=>`<option value="${v}" ${v===cur?'selected':''}>${t}</option>`;
+ const jobOpts=Object.keys(JOBS).map(id=>opt(id,esc(jt(id,S.lang)),p.job)).join('');
+ const areaOpts=['OF','REC','QC','WATER','GEN','COUNT','NONE'].map(a=>opt(a,aL(a),p.home||'NONE')).join('');
+ const jl=lg=>{const j=(JOBS[p.job]||{})[lg]||EMPTYJ,T=lg==='es'?'Español':'English';
+  return `<div class="full"><b>${T}</b></div>
+  <label class="full">${L('Título del puesto','Job title')} (${T})<input name="t_${lg}" value="${esc(j.t==='—'?'':j.t)}"></label>
+  <label class="full">${L('Propósito','Purpose')} (${T})<textarea name="p_${lg}" rows="2">${esc(j.p)}</textarea></label>
+  <label class="full">${L('Responsabilidades, una por línea','Responsibilities, one per line')} (${T})<textarea name="r_${lg}" rows="5">${esc(j.r.join('\n'))}</textarea></label>
+  <label class="full">${L('Metas, una por línea','Goals, one per line')} (${T})<textarea name="g_${lg}" rows="3">${esc(j.g.join('\n'))}</textarea></label>
+  <label class="full">${L('Reporta a','Reports to')} (${T})<input name="to_${lg}" value="${esc(j.to==='—'?'':j.to)}"></label>`};
+ return `<form class="newreq" data-form="team" data-p="${p.id}" data-job="${esc(p.job||'')}">
+  <div class="full"><b>${L('Editar persona','Edit person')}</b><br><span class="muted">${L('Los días que ya están en el plan no cambian. Área y descansos aplican a días nuevos. Cambia días ya creados en Plan del día.','Days already in the plan do not change. Area and days off apply to new days. Change existing days in the Day plan.')}</span></div>
+  <label>${L('Nombre','Name')}<input name="pname" required maxlength="40" value="${esc(p.name)}"></label>
+  <label>${L('Departamento','Department')}<select name="dept">${[['OF','Order Fulfillment'],['REC',L('Recibo','Receiving')],['OPS','Ops']].map(x=>opt(x[0],x[1],p.dept)).join('')}</select></label>
+  <label>${L('Rol','Role')}<select name="role">${opt('member',L('Equipo','Team member'),p.role)}${opt('lead',L('Líder','Lead'),p.role)}</select></label>
+  <label>${L('Puesto','Job')}<select name="job">${jobOpts}</select></label>
+  <label>${L('Área habitual','Home area')}<select name="home">${areaOpts}</select></label>
+  <div class="full"><span class="muted" style="font-size:13px;font-weight:600">${L('Días de descanso','Days off')}</span><div class="days">${DN.map(w=>`<label class="dchk"><input type="checkbox" name="r${w}" ${p.rest.includes(w)?'checked':''}> ${dl(w)}</label>`).join('')}</div></div>
+  <label class="dchk full"><input type="checkbox" name="satWork" ${p.satWork?'checked':''}> ${L('Trabaja los sábados','Works Saturdays')}</label>
+  ${hasJob?`<div class="full" style="margin-top:6px"><b>${L('Descripción del puesto','Job description')}</b><br><span class="muted">${L('Aplica a todas las personas con este puesto.','Applies to everyone with this job.')}</span></div>${jl('es')}${jl('en')}`:''}
+  <div class="full"><button class="btn primary" type="submit">${L('Guardar','Save')}</button> <button class="btn" type="button" data-act="teamEdit">${L('Cancelar','Cancel')}</button></div>
+ </form>`;
 }
 function recEditor(){
  const DN=[1,2,3,4,5,6],dl=w=>fD(addDays('2026-10-11',w),{weekday:'short'}).replace('.','');
@@ -1051,7 +1076,8 @@ const ACT={
  newReq:()=>{S.newReq=!S.newReq},
  offOk:ds=>{const o=S.off.find(x=>x.id===ds.id);o.status='approved';op('offDecide',{id:o.id,status:'approved'});toast(L(`Aprobado · ${PM[o.pid].name} ya aparece fuera en la semana`,`Approved · ${PM[o.pid].name} now shows as out on the board`))},
  offNo:ds=>{const o=S.off.find(x=>x.id===ds.id);o.status='denied';op('offDecide',{id:o.id,status:'denied'});toast(L('No aprobado','Denied'))},
- teamSel:ds=>{S.teamSel=ds.p},
+ teamSel:ds=>{S.teamSel=ds.p;S.teamEdit=false},
+ teamEdit:()=>{S.teamEdit=!S.teamEdit},
  toast:ds=>toast(ds.msg),
  toggleTask:ds=>{const t=S.tasks.find(x=>x.id===ds.id);if(t){t.done=!t.done;op('taskToggle',{id:t.id,done:t.done})}},
  memTab:ds=>{S.memTab=ds.v},
@@ -1100,6 +1126,14 @@ document.addEventListener('submit',e=>{
  if(k==='alloc'){const r=S.reqs.find(x=>x.id===f.dataset.id);const pid=f.p.value,d=f.d.value,m=+f.m.value||r.est,note=f.n.value.trim();const t=addTask(pid,d,m,f.w.value,r.es,r.en,'req',note,r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid,date:d});S.openTask=null;op('reqAssign',{id:r.id,pid,date:d,min:m,when:f.w.value,note,taskId:t.id});toast(L(`Asignada a ${PM[pid].name} · ${dShort(d)} · ${m} min`,`Assigned to ${PM[pid].name} · ${dShort(d)} · ${m} min`))}
  else if(k==='newreq'){const desc=f.desc.value.trim();if(!desc)return;const q={id:rid('r'),from:f.from.value.trim()||'—',team:f.team.value,pri:+f.pri.value,due:f.due.value||addDays(TODAY,3),est:+f.est.value||30,loc:f.loc.value.trim(),es:desc,en:desc,status:'new'};S.reqs.push(q);op('reqAdd',q);S.newReq=false;S.taskFilter='new';toast(L('Solicitud recibida · está en Nuevas','Request received · it\'s under New'))}
  else if(k==='addtask'){const t=f.t.value.trim();if(!t)return;const x=addTask(f.p.value,S.dayDate,+f.m.value||30,f.w.value,t,t,'rutina');op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:t,en:t,src:'rutina'});toast(L('Tarea agregada','Task added'))}
+ else if(k==='team'){const E=f.elements,id=f.dataset.p,jid=f.dataset.job,nm=E.pname.value.trim();if(!nm)return;
+  const rest=[1,2,3,4,5,6].filter(w=>E['r'+w].checked);
+  const pa={id,name:nm,dept:E.dept.value,role:E.role.value,job:E.job.value,home:E.home.value,rest,satWork:E.satWork.checked};
+  Object.assign(P.find(x=>x.id===id),{name:nm,dept:pa.dept,role:pa.role,job:pa.job,home:pa.home,rest,satWork:pa.satWork});
+  op('personUpdate',pa);
+  if(jid&&JOBS[jid]&&E.t_es){const rd=v=>v.split('\n').map(x=>x.trim()).filter(Boolean),mk=l=>({t:E['t_'+l].value.trim(),p:E['p_'+l].value.trim(),r:rd(E['r_'+l].value),g:rd(E['g_'+l].value),to:E['to_'+l].value.trim()});
+   const ja={id:jid,es:mk('es'),en:mk('en')};JOBS[jid]={es:ja.es,en:ja.en};op('jobUpdate',ja)}
+  S.teamEdit=false;toast(L('Guardado. Los días ya creados no cambian.','Saved. Days already created do not change.'))}
  else if(k==='newrec'){const t=f.t.value.trim();if(!t)return;const days=[1,2,3,4,5,6].filter(w=>f['d'+w].checked);if(!days.length)return;const r={id:rid('rr'),es:t,en:t,days,pid:f.p.value,min:+f.m.value||30,when:f.w.value};S.recurring.push(r);genRule(r,addDays(TODAY,1));op('recAdd',r);toast(L('Tarea recurrente agregada','Recurring task added'))}
  else if(k==='off'){const s=f.s.value;if(!s)return;let en=f.e.value||s;if(en<s)en=s;const o={id:rid('o'),pid:f.dataset.p,type:f.type.value,start:s,end:en,note:f.note.value.trim(),status:'pending'};S.off.push(o);op('offAdd',{id:o.id,pid:o.pid,type:o.type,start:s,end:en,note:o.note});toast(L('Enviado a Cesly · te avisamos cuando lo revise','Sent to Cesly · you\'ll hear back once it\'s reviewed'))}
  render();

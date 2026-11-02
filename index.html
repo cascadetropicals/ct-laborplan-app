@@ -454,7 +454,7 @@ const loc=()=>S.lang==='es'?'es-MX':'en-US';
 const fD=(ds,o)=>new Intl.DateTimeFormat(loc(),o).format(parse(ds));
 const dLong=ds=>fD(ds,{weekday:'long',day:'numeric',month:'long'});
 const dShort=ds=>fD(ds,{weekday:'short',day:'numeric'});
-const dMD=ds=>fD(ds,{day:'numeric',month:'short'});
+const dMD=ds=>ds?fD(ds,{day:'numeric',month:'short'}):'—';
 const n0=x=>Number(x).toLocaleString('en-US');
 function fT(min){let h=Math.floor(min/60),m=Math.round(min-h*60);if(m===60){h++;m=0}const ap=h>=12?'PM':'AM';return (((h+11)%12)+1)+':'+pad(m)+' '+ap}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -692,7 +692,7 @@ function msgFor(p,d){
 }
 function mTasks(){
  const counts={new:S.reqs.filter(r=>r.status==='new').length,assigned:S.reqs.filter(r=>r.status==='assigned').length,all:S.reqs.length};
- const list=S.reqs.filter(r=>S.taskFilter==='all'||r.status===S.taskFilter).sort((a,b)=>a.pri-b.pri||a.due.localeCompare(b.due));
+ const list=S.reqs.filter(r=>S.taskFilter==='all'||r.status===S.taskFilter).sort((a,b)=>a.pri-b.pri||(a.due||'9999').localeCompare(b.due||'9999'));
  let h=`<div class="row-between"><div class="seg">${[['new',L('Nuevas','New')],['assigned',L('Asignadas','Assigned')],['all',L('Todas','All')]].map(f=>`<button class="${S.taskFilter===f[0]?'on':''}" data-act="tfilter" data-v="${f[0]}">${f[1]} <small>${counts[f[0]]}</small></button>`).join('')}</div><button class="btn ${S.newReq?'':'primary'}" data-act="newReq">${S.newReq?L('Cerrar formulario','Close form'):L('+ Nueva solicitud','+ New request')}</button></div>`;
  if(S.newReq)h+=newReqForm();
  h+=`<p class="muted" style="margin:0">${L('Solicitudes de otros equipos. Asigna cada una a una persona, un día y los minutos que puede usar. Aparece en su plan cuando se publica el día.','Requests from other teams. Assign each one to a person, a day and the minutes they can spend. It shows up in their plan when that day is published.')}</p><div class="reqs">`;
@@ -722,7 +722,7 @@ function allocHelp(pid,d,r){
  if(a==='VAC')return `<span class="w bad">${p.name} ${L('está de vacaciones ese día','is on vacation that day')}</span>`;
  if(a==='REST')return `<span class="w bad">${p.name} ${L('descansa ese día','is off that day')}</span>`;
  const free=SHIFT-taskMin(pid,d);
- const late=d>r.due?`<span class="w warn">${L('Después de la fecha pedida','After the due date')} (${dMD(r.due)})</span> `:'';
+ const late=r.due&&d>r.due?`<span class="w warn">${L('Después de la fecha pedida','After the due date')} (${dMD(r.due)})</span> `:'';
  return late+`<span class="w ${free<r.est?'warn':'good'}">${p.name} · ${aS(a)} · ${free} ${L('min libres ese día','min free that day')}</span>`+(pendingOn(pid,d)?` <span class="w warn">${L('Tiene tiempo libre pendiente','Has a pending time-off request')}</span>`:'');
 }
 function newReqForm(){

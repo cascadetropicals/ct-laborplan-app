@@ -126,6 +126,8 @@ table{border-collapse:collapse;width:100%}
 .board{min-width:860px}
 .board th,.board td{border-bottom:1px solid var(--line);padding:4px;vertical-align:middle}
 .board thead th{background:var(--surface-2);position:sticky;top:0}
+.scroll-x[data-keep=board],.scroll-x[data-keep=wk]{overflow:auto;max-height:calc(100vh - 120px);max-height:calc(100dvh - 120px);overscroll-behavior:auto}
+.board thead th,.wk thead th{position:sticky;top:0;z-index:5;background:var(--surface-2);box-shadow:0 1px 0 var(--line)}
 .pcol{text-align:left;min-width:120px;padding-left:10px!important}
 .pname{display:block;font-weight:700}
 .prole{display:block;font-size:12px;color:var(--muted);font-weight:500}
@@ -452,9 +454,11 @@ const L=(es,en)=>S.lang==='es'?es:en;
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const loc=()=>S.lang==='es'?'es-MX':'en-US';
 const fD=(ds,o)=>new Intl.DateTimeFormat(loc(),o).format(parse(ds));
-const dLong=ds=>fD(ds,{weekday:'long',day:'numeric',month:'long'});
-const dShort=ds=>fD(ds,{weekday:'short',day:'numeric'});
-const dMD=ds=>ds?fD(ds,{day:'numeric',month:'short'}):'—';
+const ord=n=>{const v=n%100;return n+(v>=11&&v<=13?'th':({1:'st',2:'nd',3:'rd'})[n%10]||'th')};
+const dNum=ds=>S.lang==='es'?String(parse(ds).getDate()):ord(parse(ds).getDate());
+const dLong=ds=>S.lang==='es'?fD(ds,{weekday:'long',day:'numeric',month:'long'}):fD(ds,{weekday:'long'})+', '+fD(ds,{month:'long'})+' '+dNum(ds);
+const dShort=ds=>fD(ds,{weekday:'short'}).replace('.','')+' '+dNum(ds);
+const dMD=ds=>ds?(S.lang==='es'?fD(ds,{day:'numeric',month:'short'}):fD(ds,{month:'short'})+' '+dNum(ds)):'—';
 const n0=x=>Number(x).toLocaleString('en-US');
 function fT(min){let h=Math.floor(min/60),m=Math.round(min-h*60);if(m===60){h++;m=0}const ap=h>=12?'PM':'AM';return (((h+11)%12)+1)+':'+pad(m)+' '+ap}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -548,6 +552,8 @@ function weekTasksGrid(days){
   let s=sub?`<tr class="shc"><th colspan="7">${chip(a)} ${label}</th></tr>`:sec(`${chip(a)} ${label}`);
   if(a==='OF'||a==='REC'){
    s+=`<tr><th>${L('Unidades','Units')}</th>${days.map(d=>{const u=areaUnits(d,a);return `<td>${sat(d)?'':u!=null?'<b>'+n0(u)+'</b>':'<span class="muted">—</span>'}</td>`}).join('')}</tr>`;
+   if(a==='OF'){const sp=d=>(META[d]||{}).split,cell=f=>days.map(d=>{const x=sp(d);return `<td>${sat(d)||!x?'':f(x)}</td>`}).join('');
+    s+=`<tr><th>${L('Pickups','Pickups')}</th>${cell(x=>n0(x.pick))}</tr><tr><th>FedEx<br><span class="muted" style="font-size:11px">${L('unidades / pallets','units / pallets')}</span></th>${cell(x=>n0(x.fedex)+' / '+n0(x.pal))}</tr><tr><th>${L('Entregas','Deliveries')}</th>${cell(x=>n0(x.deliv))}</tr>`}
    if(a==='REC')s+=`<tr><th>${L('Llega','Incoming')}</th>${days.map(d=>`<td>${sat(d)?'':(META[d]&&META[d].from)||''}</td>`).join('')}</tr>`;
    s+=`<tr><th>${L('Hora de fin','Target end time')}</th>${days.map(d=>{const need=sat(d)?null:areaNeed(d,a);if(need==null)return'<td></td>';const e=estEnd(d,a),lv=level(d,a);return `<td class="lv-${lv}"><b>${need===0?(crew(d,a).length?L('Sin trabajo','No work'):'—'):(e?fT(e):L('Sin equipo','No crew'))}</b></td>`}).join('')}</tr>`;
   }
@@ -579,6 +585,7 @@ function mDay(){
  ${d===NEXT&&!S.published[d]?`<button class="btn primary" data-act="publish">${L('Publicar plan','Publish plan')}</button>`:''}</div></div>`;
  if(st==='draft')h+=`<p class="muted" style="margin:0">${L('Borrador. Se publica el día anterior, después de tu revisión.','Draft. It gets published the day before, after your review.')}</p>`;
  if(st==='published'&&d>TODAY)h+=`<p class="muted lv-good" style="margin:0">${L('Publicado. El equipo ya lo ve en su teléfono y en el kiosko.','Published. The team can see it on their phones and the kiosk.')}</p>`;
+ if(st!=='done')h+=`<label style="max-width:560px">${L('Nota del día (la ve el equipo)','Day note (the team sees it)')}<input id="dayNote" maxlength="300" value="${esc(m.note?m.note[0]:'')}" placeholder="${L('Ej. Junta Lean 9:10 AM','e.g. Lean meeting 9:10 AM')}"></label>`;
  if(m.note)h+=`<div class="callout" style="background:var(--surface-2);border-color:var(--line)"><div><b>${L('Nota del día','Day note')}: ${L(m.note[0],m.note[1])}</b></div></div>`;
  h+=sheetView(d,st);
  if(st!=='done'){
@@ -761,7 +768,7 @@ function mTeam(){
  const tabs=`<div class="seg" style="align-self:flex-start">${[['people',L('Personas y puestos','People & jobs')],['rec',L('Tareas recurrentes','Recurring tasks')]].map(t=>`<button class="${S.teamTab===t[0]?'on':''}" data-act="teamTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>`;
  if(S.teamTab==='rec')return tabs+recEditor();
  return tabs+`<div class="team-grid"><div class="plist">${P.map(q=>`<button class="${q.id===S.teamSel?'on':''}" data-act="teamSel" data-p="${q.id}"><span><b>${q.name}</b><br><span class="muted" style="font-size:12px">${L(jt(q.job,'es'),jt(q.job,'en'))}</span></span>${chip(q.home)}</button>`).join('')}</div>
- <div class="card"><div class="row-between" style="margin-bottom:8px"><span class="muted">${roleLabel(p)} · ${L('Descansa','Day off')}: ${p.rest.map(r=>dShort(addDays('2026-10-11',r)).replace(/\s?\d+$/,'')).join(', ')||'—'}${p.satWork?' · '+L('Trabaja sábado','Works Saturday'):''}</span><button class="btn sm" data-act="teamEdit">${S.teamEdit?L('Cancelar','Cancel'):L('Editar','Edit')}</button></div>${S.teamEdit?teamForm(p):jobView(p.job)}</div></div>`;
+ <div class="card"><div class="row-between" style="margin-bottom:8px"><span class="muted">${roleLabel(p)} · ${L('Descansa','Day off')}: ${p.rest.map(r=>fD(addDays('2026-10-11',r),{weekday:'short'}).replace('.','')).join(', ')||'—'}${p.satWork?' · '+L('Trabaja sábado','Works Saturday'):''}</span><button class="btn sm" data-act="teamEdit">${S.teamEdit?L('Cancelar','Cancel'):L('Editar','Edit')}</button></div>${S.teamEdit?teamForm(p):jobView(p.job)}</div></div>`;
 }
 function teamForm(p){
  const DN=[1,2,3,4,5,6],dl=w=>fD(addDays('2026-10-11',w),{weekday:'short'}).replace('.',''),hasJob=!!JOBS[p.job];
@@ -921,7 +928,7 @@ function applyState(st){
  META=st.meta||{};JOBS=st.jobs||{};MGR=st.mgr||'Cesly';
  S.assign={};for(const d in st.schedule)S.assign[d]=Object.assign({},st.schedule[d]);
  S.tasks=st.tasks;S.off=st.off;S.reqs=st.reqs;S.recurring=st.recurring;
- S.published={};S.start={};for(const d in st.plan){S.published[d]=st.plan[d].published;S.start[d]=st.plan[d].start}
+ S.published={};S.start={};for(const d in st.plan){S.published[d]=st.plan[d].published;S.start[d]=st.plan[d].start;if(st.plan[d].note){META[d]=META[d]||{};META[d].note=[st.plan[d].note,st.plan[d].note]}}
  S.me=st.me;S.role=st.me.role;S.pid=st.me.id;S.version=st.version;
  if(!S.dayDate||!ALLDAYS.includes(S.dayDate))S.dayDate=ALLDAYS.includes(NEXT)?NEXT:ALLDAYS[0];
  if(!S.calMonth)S.calMonth=TODAY.slice(0,7);
@@ -1106,6 +1113,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('change',e=>{
  const id=e.target.id,cl=e.target.classList;
  if(id==='startSel'){S.start[S.dayDate]=+e.target.value;op('setStart',{date:S.dayDate,min:+e.target.value});render()}
+ else if(id==='dayNote'){const v=e.target.value.trim(),d=S.dayDate;META[d]=META[d]||{};META[d].note=v?[v,v]:null;op('setNote',{date:d,note:v});render()}
  else if(id==='addRest'){if(e.target.value){setArea(S.dayDate,e.target.value,'REST');render()}}
  else if(id==='pullReq'){if(e.target.value){const r=S.reqs.find(x=>x.id===e.target.value);const t=addTask('',S.dayDate,r.est,'during',r.es,r.en,'req','',r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid:'',date:S.dayDate});op('reqAssign',{id:r.id,pid:'',date:S.dayDate,min:r.est,when:'during',taskId:t.id});toast(L('Solicitud agregada · elige la persona','Request added · pick a person'));render()}}
  else if(cl.contains('slot')){const d=e.target.dataset.d||S.dayDate,a=e.target.dataset.a,cur=e.target.dataset.cur,v=e.target.value;if(cur&&cur!==v)setArea(d,cur,'NONE');if(v)setArea(d,v,a);render()}

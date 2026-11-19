@@ -608,7 +608,6 @@ function mDay(){
  let h=`<div class="dayhdr"><div class="l"><button class="btn sm" data-act="goDay" data-d="${prev||d}" ${prev?'':'disabled'} aria-label="prev">‹</button><h3>${dLong(d)}</h3><button class="btn sm" data-act="goDay" data-d="${next||d}" ${next?'':'disabled'} aria-label="next">›</button><span class="pill st-${st}">${stLabel(st)}</span></div>
  <div class="l"><label style="flex-direction:row;align-items:center;gap:6px">${L('Entrada','Start')}<select id="startSel" class="sel" style="width:auto" ${st==='done'?'disabled':''}>${[360,390,420,450].map(v=>`<option value="${v}" ${startOf(d)===v?'selected':''}>${fT(v)}</option>`).join('')}</select></label>
  ${st!=='done'&&!S.published[d]&&d>=TODAY?`<button class="btn primary" data-act="genPlan">${L('Generar plan','Generate plan')}</button>`:''}
- ${st!=='done'&&META[d]&&!tonly(d)?`<button class="btn" data-act="suggest">${L('Sugerir equipos','Suggest crews')}</button>`:''}
  ${d===NEXT&&!S.published[d]?`<button class="btn primary" data-act="publish">${L('Publicar plan','Publish plan')}</button>`:''}</div></div>`;
  if(st==='draft')h+=`<p class="muted" style="margin:0">${L('Borrador. Se publica el día anterior, después de tu revisión.','Draft. It gets published the day before, after your review.')}</p>`;
  if(st==='published'&&d>TODAY)h+=`<p class="muted lv-good" style="margin:0">${L('Publicado. El equipo ya lo ve en su teléfono y en el kiosko.','Published. The team can see it on their phones and the kiosk.')}</p>`;

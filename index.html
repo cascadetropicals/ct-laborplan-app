@@ -471,30 +471,38 @@ const chip=a=>`<span class="chip a-${a}">${aS(a)}</span>`;
 const roleLabel=p=>p.role==='lead'?L(p.dept==='REC'?'Líder Recibo':'Líder OF',p.dept==='REC'?'Receiving lead':'OF lead'):L(p.dept==='REC'?'Equipo Recibo':'Equipo OF',p.dept==='REC'?'Receiving':'OF');
 const EMPTYJ={t:'—',p:'',r:[],g:[],to:'—'};
 const jt=(id,lg)=>((JOBS[id]||{})[lg]||EMPTYJ).t;
-function defArea(p,d){const w=dow(d);if((p.rest||[]).includes(w))return'REST';if(w===6)return p.satWork?'TASKS':'REST';return p.home||'NONE'}
-function addTask(pid,date,min,when,es,en,src,note,from,done){const t={id:rid('t'),pid,date,min,when,es,en,src:src||'rutina',note:note||'',from:from||'',done:!!done};S.tasks.push(t);return t}
+function defArea(p,d){const w=dow(d);if((p.rest||[]).includes(w))return'REST';if(w===6)return p.satWork?'TASKS':'REST';if(w===0)return p.sunWork?'TASKS':'REST';return p.home||'NONE'}
+const tonly=d=>dow(d)===6||dow(d)===0;
+function addTask(pid,date,min,when,es,en,src,note,from,done){const t={id:rid('t'),pid,date,min,when,es,en,src:src||'rutina',note:note||'',from:from||'',done:!!done,sort:0,tm:0};S.tasks.push(t);return t}
 function setArea(d,pid,a){(S.assign[d]=S.assign[d]||{})[pid]=a;op('setArea',{date:d,pid,area:a})}
 
-function genRule(r,from){for(const d of ALLDAYS){if(d<from||!r.days.includes(dow(d)))continue;const ok=r.pid&&!['REST','VAC'].includes(areaOf(r.pid,d));if(!ok&&d<TODAY)continue;const t=addTask(ok?r.pid:'',d,r.min,r.when,r.es,r.en,'rec','','',d<TODAY);t.recId=r.id}}
+function genRule(r,from){for(const d of ALLDAYS){if(d<from||!r.days.includes(dow(d)))continue;if(r.pid==='ALL'){for(const q of P){if(['REST','VAC','NONE'].includes(areaOf(q.id,d)))continue;const t=addTask(q.id,d,r.min,r.when,r.es,r.en,'rec','','',false);t.recId=r.id;t.sort=r.sort||0;t.tm=r.tm||0}continue}const ok=r.pid&&!['REST','VAC'].includes(areaOf(r.pid,d));if(!ok&&d<TODAY)continue;const t=addTask(ok?r.pid:'',d,r.min,r.when,r.es,r.en,'rec','','',d<TODAY);t.recId=r.id;t.sort=r.sort||0;t.tm=r.tm||0}}
 function regen(r){S.tasks=S.tasks.filter(t=>!(t.recId===r.id&&t.date>TODAY));genRule(r,addDays(TODAY,1))}
 const unscheduled=d=>P.filter(p=>{const a=areaOf(p.id,d);return a==='NONE'||(a==='TASKS'&&!dayTasks(p.id,d).length)});
 const covers=(o,d)=>d>=o.start&&d<=(o.end||o.start);
-function areaOf(pid,d){if(!PM[pid]||!P.some(x=>x.id===pid))return'NONE';if(S.off.some(o=>o.pid===pid&&o.status==='approved'&&covers(o,d)))return'VAC';return S.assign[d]?(S.assign[d][pid]||'NONE'):defArea(PM[pid],d)}
+function areaOf(pid,d){if(!PM[pid]||!P.some(x=>x.id===pid))return'NONE';if(S.off.some(o=>o.pid===pid&&o.status==='approved'&&!PARTIAL.includes(o.type)&&covers(o,d)))return'VAC';return S.assign[d]?(S.assign[d][pid]||'NONE'):defArea(PM[pid],d)}
 const pendingOn=(pid,d)=>S.off.some(o=>o.pid===pid&&o.status==='pending'&&covers(o,d));
-const dayTasks=(pid,d)=>S.tasks.filter(t=>t.pid===pid&&t.date===d);
+const dayTasks=(pid,d)=>S.tasks.filter(t=>t.pid===pid&&t.date===d).sort((a,b)=>(a.sort||0)-(b.sort||0)||(a.tm||0)-(b.tm||0));
 const taskMin=(pid,d)=>dayTasks(pid,d).reduce((s,t)=>s+t.min,0);
 const startOf=d=>S.start[d]||420;
 const isPub=d=>d<=TODAY||!!S.published[d];
 function status(d){if(d<TODAY)return'done';if(d===TODAY||S.published[d])return'published';if(d===NEXT)return'ready';return'draft'}
 const stLabel=st=>({done:L('Completado','Done'),published:L('Publicado','Published'),ready:L('Por publicar','To publish'),draft:L('Borrador','Draft')})[st];
 const crew=(d,a)=>P.filter(p=>areaOf(p.id,d)===a);
-const areaHave=(d,a)=>crew(d,a).reduce((s,p)=>s+Math.max(0,SHIFT-(a==='WATER'?0:taskMin(p.id,d)))/60,0);
-function areaNeed(d,a){const m=META[d];if(!m)return null;if(a==='OF')return m.out?m.out[1]:(dow(d)===6?null:0);if(a==='REC')return m.in?m.in[1]:(dow(d)===6?null:0);if(a==='COUNT')return m.count?+(m.count/3600).toFixed(1):null;return null}
+const NOR='__noriego',noRiego=d=>((S.assign[d]||{})[NOR])==='WATER',wcrew=d=>(noRiego(d)?[{id:NOR,name:'No Riego'}]:[]).concat(crew(d,'WATER'));
+const crewH=(d,a)=>a==='OF'?crew(d,'OF').concat(crew(d,'QC')):crew(d,a);
+const areaHave=(d,a)=>crewH(d,a).reduce((s,p)=>s+Math.max(0,SHIFT-(a==='WATER'?0:taskMin(p.id,d)))/60,0);
+function areaNeed(d,a){const m=META[d];if(!m)return null;if(a==='OF')return m.out?m.out[1]:(tonly(d)?null:0);if(a==='REC')return m.in?m.in[1]:(tonly(d)?null:0);if(a==='COUNT')return m.count?+(m.count/3600).toFixed(1):null;return null}
 const areaUnits=(d,a)=>{const m=META[d]||{};return a==='OF'?(m.out?m.out[0]:null):a==='REC'?(m.in?m.in[0]:null):a==='COUNT'?(m.count||null):null};
 function estEnd(d,a){const need=areaNeed(d,a);if(!need)return null;const eff=areaHave(d,a)/7.5;if(eff<=0)return null;const h=need/eff;return startOf(d)+h*60+(h>4?30:0)}
-function level(d,a){const need=areaNeed(d,a);if(need==null)return'na';const c=crew(d,a).length;if(need===0)return c>0?'warn':'good';const e=estEnd(d,a);if(e==null)return'bad';return e<=870?'good':e<=930?'warn':'bad'}
+function level(d,a){const need=areaNeed(d,a);if(need==null)return'na';const c=crewH(d,a).length;if(need===0)return c>0?'warn':'good';const e=estEnd(d,a);if(e==null)return'bad';return e<=870?'good':e<=930?'warn':'bad'}
 function reportTo(p,a){if(p.role==='lead')return'Cesly';if(a==='OF'||a==='QC')return'Isabel';if(a==='REC'||a==='COUNT')return'Maria';return'Cesly'}
-const typeL=t=>({days:L('Días libres','Days off'),appt:L('Cita (medio día)','Appointment (half day)'),pto:'PTO / Sick'})[t]||t;
+const typeL=t=>({days:L('Días libres','Days off'),early:L('Salir temprano','Leave early'),late:L('Entrar tarde','Come in late'),appt:L('Cita','Appointment'),pto:'PTO / Sick'})[t]||t;
+const PARTIAL=['early','late','appt'];
+const typeO=o=>typeL(o.type)+(o.tm?' · '+fT(o.tm):'');
+const partOf=(pid,d)=>S.off.filter(o=>o.pid===pid&&o.status==='approved'&&PARTIAL.includes(o.type)&&covers(o,d));
+const partTxt=o=>o.type==='early'?L('Sale ','Leaves ')+fT(o.tm):o.type==='late'?L('Entra ','In ')+fT(o.tm):L('Cita','Appointment')+(o.tm?' '+fT(o.tm):'');
+const partChips=d=>P.flatMap(p=>partOf(p.id,d).map(o=>`<span class="chip pendc">${p.name} · ${partTxt(o)}</span>`)).join('');
 const offL=s=>({pending:L('Pendiente','Pending'),approved:L('Aprobado','Approved'),denied:L('No aprobado','Denied')})[s];
 const rangeTxt=o=>o.end&&o.end!==o.start?`${dMD(o.start)} – ${dMD(o.end)}`:dMD(o.start);
 const title=t=>L(t.es,t.en);
@@ -522,23 +530,23 @@ function publishCallout(){
 function mWeek(){
  const days=WEEKDAYS[S.week];
  let h=publishCallout();
- h+=`<div class="row-between"><div class="seg">${WEEKS.map((w,i)=>`<button class="${S.week===i?'on':''}" data-act="week" data-v="${i}">${i===0?L('Esta semana','This week'):L('Sem ','Wk ')+w.n}<small>${dMD(w.start)}–${dMD(addDays(w.start,5))}</small></button>`).join('')}</div><div class="seg">${[['tasks',L('Por tareas','By task')],['people',L('Por persona','By person')]].map(v=>`<button class="${S.weekView===v[0]?'on':''}" data-act="wview" data-v="${v[0]}">${v[1]}</button>`).join('')}</div></div>`;
+ h+=`<div class="row-between"><div class="seg" style="gap:6px"><button data-act="week" data-v="${Math.max(0,S.week-1)}" ${S.week<=0?'disabled':''} aria-label="prev">‹</button><select id="wk-sel" class="sel" style="width:auto;min-width:230px" aria-label="week">${WEEKS.map((w,i)=>`<option value="${i}" ${S.week===i?'selected':''}>${L('Sem ','Wk ')}${w.n} · ${dMD(w.start)} – ${dMD(addDays(w.start,6))}${i===0?' ('+L('esta semana','this week')+')':''}</option>`).join('')}</select><button data-act="week" data-v="${Math.min(WEEKS.length-1,S.week+1)}" ${S.week>=WEEKS.length-1?'disabled':''} aria-label="next">›</button></div><div class="seg">${[['tasks',L('Por tareas','By task')],['people',L('Por persona','By person')]].map(v=>`<button class="${S.weekView===v[0]?'on':''}" data-act="wview" data-v="${v[0]}">${v[1]}</button>`).join('')}</div></div>`;
  if(S.weekView==='tasks')return h+`<p class="muted" style="margin:0">${L('Como la hoja: cada fila es una tarea o un equipo, y tú llenas los nombres por día. Abajo ves quién no tiene nada programado.','Like the sheet: each row is a task or a crew, and you fill in the names for each day. The bottom row shows who has nothing scheduled.')}</p>`+weekTasksGrid(days);
- h+=`<div class="row-between"><p class="muted" style="margin:0">${L('Toca una celda para cambiar el área. Toca un día para ver y publicar el plan.','Tap a cell to change the area. Tap a day to see and publish its plan.')}</p><div class="legend">${['OF','QC','REC','WATER','GEN','TASKS','REST','VAC'].map(chip).join('')}</div></div>`;
+ h+=`<div class="row-between"><p class="muted" style="margin:0">${L('Toca una celda para cambiar el área. Toca un día para ver y publicar el plan.','Tap a cell to change the area. Tap a day to see and publish its plan.')}</p><div class="legend">${['OF','QC','REC','WATER','COUNT','TASKS','REST','VAC'].map(chip).join('')}</div></div>`;
  h+=`<div class="scroll-x" data-keep="board"><table class="board"><thead><tr><th class="pcol">${L('Persona','Person')}</th>${days.map(d=>{const st=status(d);return `<th><button class="dayhead ${d===TODAY?'today':''}" data-act="goDay" data-d="${d}"><span class="dname">${dShort(d)}</span><span class="pill st-${st}">${stLabel(st)}</span></button></th>`}).join('')}</tr></thead><tbody>`;
  for(const p of P){h+=`<tr><th class="pcol"><span class="pname">${p.name}</span><span class="prole">${roleLabel(p)}</span></th>${days.map(d=>cellHTML(p,d)).join('')}</tr>`}
  h+=`</tbody><tfoot>`;
  for(const a of ['OF','REC']){
-  h+=`<tr><th>${chip(a)}<br><span class="muted" style="font-size:11px">${L('necesita / tiene','need / have')}</span></th>${days.map(d=>{const need=areaNeed(d,a),c=crew(d,a).length;if(need==null)return `<td><div class="capcell lv-na">${dow(d)===6?'':(c?c+' p · ':'')+(META[d]?'—':L('sin pronóstico','no forecast'))}</div></td>`;const lv=level(d,a);return `<td><div class="capcell bg-${lv} lv-${lv}">${c} p · ${need.toFixed(1)} / ${areaHave(d,a).toFixed(1)} h</div></td>`}).join('')}</tr>`;
+  h+=`<tr><th>${chip(a)}<br><span class="muted" style="font-size:11px">${L('necesita / tiene','need / have')}</span></th>${days.map(d=>{const need=areaNeed(d,a),c=crewH(d,a).length;if(need==null)return `<td><div class="capcell lv-na">${dow(d)===6?'':(c?c+' p · ':'')+(META[d]?'—':L('sin pronóstico','no forecast'))}</div></td>`;const lv=level(d,a);return `<td><div class="capcell bg-${lv} lv-${lv}">${c} p · ${need.toFixed(1)} / ${areaHave(d,a).toFixed(1)} h</div></td>`}).join('')}</tr>`;
  }
  return h+`</tfoot></table></div>`;
 }
 function weekTasksGrid(days){
- const ro=d=>d<TODAY,sat=d=>dow(d)===6,wd=days.filter(d=>!sat(d));
- const sec=(t,extra)=>`<tr class="shh"><th colspan="7">${t}${extra||''}</th></tr>`;
+ const ro=d=>d<TODAY,sat=d=>tonly(d),wd=days.filter(d=>!sat(d));
+ const sec=(t,extra)=>`<tr class="shh"><th colspan="8">${t}${extra||''}</th></tr>`;
  const nmList=arr=>arr.map(p=>`<span class="nm">${p.name}</span>`).join('');
- let h=`<div class="scroll-x" data-keep="wk"><table class="sh wk"><thead><tr class="shc"><th></th>${days.map(d=>{const st=status(d);return `<th><button class="dayhead ${d===TODAY?'today':''}" data-act="goDay" data-d="${d}"><span class="dname">${dShort(d)}</span><span class="pill st-${st}">${stLabel(st)}</span><span class="dstart">${L('Entrada','Start')} ${fT(startOf(d))}</span></button></th>`}).join('')}</tr></thead><tbody>`;
- h+=`<tr><th>${L('Fuera','Out')}</th>${days.map(d=>{const v=P.filter(p=>areaOf(p.id,d)==='VAC'),r=sat(d)?[]:P.filter(p=>areaOf(p.id,d)==='REST'),pe=P.filter(p=>pendingOn(p.id,d)&&areaOf(p.id,d)!=='VAC');return `<td><div class="outcell">${v.map(p=>`<span class="chip a-VAC">${p.name}</span>`).join('')}${r.map(p=>`<span class="chip a-REST">${p.name}</span>`).join('')}${pe.map(p=>`<span class="chip pendc">${p.name} ?</span>`).join('')}${sat(d)?`<span class="muted" style="font-size:12px">${L('Sin tarea = descansa','No task = off')}</span>`:(!v.length&&!r.length&&!pe.length?'<span class="muted">—</span>':'')}</div></td>`}).join('')}</tr>`;
+ let h=genBar(days)+reqStrip(days)+quickBar(days)+`<div class="scroll-x" data-keep="wk"><table class="sh wk"><thead><tr class="shc"><th></th>${days.map(d=>{const st=status(d);return `<th><button class="dayhead ${d===TODAY?'today':''}" data-act="goDay" data-d="${d}"><span class="dname">${dShort(d)}</span><span class="pill st-${st}">${stLabel(st)}</span><span class="dstart">${L('Entrada','Start')} ${fT(startOf(d))}</span></button></th>`}).join('')}</tr></thead><tbody>`;
+ h+=`<tr><th>${L('Fuera','Out')}</th>${days.map(d=>{const v=P.filter(p=>areaOf(p.id,d)==='VAC'),r=sat(d)?[]:P.filter(p=>areaOf(p.id,d)==='REST'),pe=P.filter(p=>pendingOn(p.id,d)&&areaOf(p.id,d)!=='VAC');return `<td><div class="outcell">${v.map(p=>`<span class="chip a-VAC">${p.name}</span>`).join('')}${r.map(p=>`<span class="chip a-REST">${p.name}</span>`).join('')}${pe.map(p=>`<span class="chip pendc">${p.name} ?</span>`).join('')}${partChips(d)}${sat(d)?`<span class="muted" style="font-size:12px">${L('Sin tarea = descansa','No task = off')}</span>`:(!v.length&&!r.length&&!pe.length&&!partChips(d)?'<span class="muted">—</span>':'')}</div></td>`}).join('')}</tr>`;
  const ts=S.tasks.filter(t=>days.includes(t.date));
  h+=`<tr class="tsum"><th>${L('Tareas','Tasks')}<button class="linkbtn" data-act="wkTasks">${S.wkTasksOpen?L('Ocultar lista','Hide list'):L('Ver todas','Show all')}</button></th>${days.map(d=>{const dt=ts.filter(t=>t.date===d),un=dt.filter(t=>!t.pid),mins=dt.reduce((a,t)=>a+t.min,0);if(!dt.length)return'<td><span class="muted">—</span></td>';return `<td><div class="tcount"><b>${dt.length}</b> ${L('tareas','tasks')} · ${Math.round(mins/60*10)/10} h</div>${un.length&&!ro(d)?`<div class="unlist">${un.map(t=>`<div class="unitem"><span>${esc(title(t))}</span><select class="tperson wsel unas" data-id="${t.id}" aria-label="person"><option value="">— ${L('Elegir persona','Pick a person')} —</option>${personOpts(d,'','',true).replace('<option value=""></option>','')}</select></div>`).join('')}</div>`:(un.length?'':`<span class="lv-good" style="font-size:12px">✓ ${L('Todas con persona','All assigned')}</span>`)}</td>`}).join('')}</tr>`;
  if(S.wkTasksOpen){
@@ -549,23 +557,25 @@ function weekTasksGrid(days){
    h+=`<tr class="tdet"><th>${esc(title(any))}</th>${days.map(d=>`<td>${ts.filter(t=>t.es===k&&t.date===d).map(t=>`<select class="tperson wsel ${t.pid?'':'unas'}" data-id="${t.id}" ${ro(d)?'disabled':''} aria-label="person">${personOpts(d,t.pid,'— ?',true)}</select>`).join('')}</td>`).join('')}</tr>`}
  }
  const areaSec=(a,label,n,sub)=>{
-  let s=sub?`<tr class="shc"><th colspan="7">${chip(a)} ${label}</th></tr>`:sec(`${chip(a)} ${label}`);
-  if(a==='OF'||a==='REC'){
-   s+=`<tr><th>${L('Unidades','Units')}</th>${days.map(d=>{const u=areaUnits(d,a);return `<td>${sat(d)?'':u!=null?'<b>'+n0(u)+'</b>':'<span class="muted">—</span>'}</td>`}).join('')}</tr>`;
+  let s=sub?`<tr class="shc"><th colspan="8">${chip(a)} ${label}</th></tr>`:sec(`${chip(a)} ${label}`);
+  const so=d=>sat(d)&&a!=='COUNT';
+  if(a==='OF'||a==='REC'||a==='COUNT'){
+   s+=`<tr><th>${L('Unidades','Units')}</th>${days.map(d=>{const u=areaUnits(d,a);return `<td>${so(d)?'':u!=null?'<b>'+n0(u)+'</b>':'<span class="muted">—</span>'}</td>`}).join('')}</tr>`;
    if(a==='OF'){const sp=d=>(META[d]||{}).split,cell=f=>days.map(d=>{const x=sp(d);return `<td>${sat(d)||!x?'':f(x)}</td>`}).join('');
     s+=`<tr><th>${L('Pickups','Pickups')}</th>${cell(x=>n0(x.pick))}</tr><tr><th>FedEx<br><span class="muted" style="font-size:11px">${L('unidades / pallets','units / pallets')}</span></th>${cell(x=>n0(x.fedex)+' / '+n0(x.pal))}</tr><tr><th>${L('Entregas','Deliveries')}</th>${cell(x=>n0(x.deliv))}</tr>`}
    if(a==='REC')s+=`<tr><th>${L('Llega','Incoming')}</th>${days.map(d=>`<td>${sat(d)?'':(META[d]&&META[d].from)||''}</td>`).join('')}</tr>`;
-   s+=`<tr><th>${L('Hora de fin','Target end time')}</th>${days.map(d=>{const need=sat(d)?null:areaNeed(d,a);if(need==null)return'<td></td>';const e=estEnd(d,a),lv=level(d,a);return `<td class="lv-${lv}"><b>${need===0?(crew(d,a).length?L('Sin trabajo','No work'):'—'):(e?fT(e):L('Sin equipo','No crew'))}</b></td>`}).join('')}</tr>`;
+   if(a==='REC')s+=`<tr><th>${L('Puestos camión','Truck roles')}</th>${days.map(d=>{if(sat(d))return'<td></td>';const os=trOrigins(d),rs=trRoles();return `<td>${os.map(o=>`<button class="linkbtn" data-act="goDay" data-d="${d}">${o} ${rs.filter(r=>trPeople(d,o,r.id).length).length}/${rs.length}</button>`).join(' ')}</td>`}).join('')}</tr>`;
+   s+=`<tr><th>${L('Hora de fin','Target end time')}</th>${days.map(d=>{const need=so(d)?null:areaNeed(d,a);if(need==null)return'<td></td>';const e=estEnd(d,a),lv=level(d,a);return `<td class="lv-${lv}"><b>${need===0?(crewH(d,a).length?L('Sin trabajo','No work'):'—'):(e?fT(e):L('Sin equipo','No crew'))}</b></td>`}).join('')}</tr>`;
   }
-  for(let i=0;i<n;i++){s+=`<tr><th class="slotn">${i+1}</th>${days.map(d=>{if(sat(d))return i===0?`<td rowspan="${n}" class="satcell">${L('Sábado: solo tareas','Saturday: tasks only')}</td>`:'';const p=crew(d,a)[i];return `<td><select class="slot wsel" data-a="${a}" data-d="${d}" data-cur="${p?p.id:''}" ${ro(d)?'disabled':''} aria-label="${aS(a)} ${i+1}">${slotOpts(d,a,p?p.id:'')}</select></td>`}).join('')}</tr>`}
+  for(let i=0;i<n;i++){s+=`<tr><th class="slotn">${i+1}</th>${days.map(d=>{if(so(d))return i===0?`<td rowspan="${n}" class="satcell">${dow(d)===0?L('Domingo: solo tareas','Sunday: tasks only'):L('Sábado: solo tareas','Saturday: tasks only')}</td>`:'';const p=(a==='WATER'?wcrew(d):crew(d,a))[i];return `<td><select class="slot wsel" data-a="${a}" data-d="${d}" data-cur="${p?p.id:''}" ${ro(d)?'disabled':''} aria-label="${aS(a)} ${i+1}">${slotOpts(d,a,p?p.id:'')}</select></td>`}).join('')}</tr>`}
   return s;
  };
- const nn=(a,min)=>Math.max(min,...wd.map(d=>crew(d,a).length+(ro(d)?0:1)));
+ const nn=(a,min)=>a==='COUNT'?Math.max(min,...days.map(d=>crew(d,'COUNT').length+(ro(d)?0:1))):a==='QC'?Math.max(1,...wd.map(d=>crew(d,'QC').length)):Math.max(min,...wd.map(d=>(a==='WATER'?wcrew(d):crew(d,a)).length+(ro(d)?0:1)));
  h+=areaSec('OF',L('Sacar órdenes – Order Fulfillment','Pull orders – Order Fulfillment'),nn('OF',6));
  h+=areaSec('QC',L('Devoluciones / QC (con OF)','Returns / QC (with OF)'),nn('QC',1),true);
  h+=areaSec('REC',L('Recibo – CT In & Out','Receiving – CT In & Out'),nn('REC',5));
+ h+=areaSec('COUNT',aL('COUNT'),nn('COUNT',2));
  h+=areaSec('WATER',aL('WATER'),nn('WATER',1));
- h+=areaSec('GEN',aL('GEN'),nn('GEN',1));
  h+=sec(L('Sin programar','Nothing scheduled'),`<span class="shcount">${L('Toca un nombre para darle un área o descanso','Tap a name to give them an area or a day off')}</span>`);
  h+=`<tr class="unsrow"><th>${L('Personas','People')}</th>${days.map(d=>{const u=unscheduled(d);return `<td>${u.length?`<div class="unsch">${u.map(p=>`<button class="nmb" data-act="cell" data-p="${p.id}" data-d="${d}" ${ro(d)?'disabled':''}>${p.name}${dayTasks(p.id,d).length?` <small>(${L('tiene tarea','has a task')})</small>`:''}</button>`).join('')}</div>`:`<span class="lv-good"><b>✓ ${L('Todos programados','All scheduled')}</b></span>`}</td>`}).join('')}</tr>`;
  h+=`<tr><th>${L('Trabajando','Working')}</th>${days.map(d=>`<td><b>${P.filter(p=>!['REST','VAC','NONE'].includes(areaOf(p.id,d))).length}</b> / ${P.length}</td>`).join('')}</tr>`;
@@ -581,7 +591,8 @@ function mDay(){
  const m=META[d]||{};
  let h=`<div class="dayhdr"><div class="l"><button class="btn sm" data-act="goDay" data-d="${prev||d}" ${prev?'':'disabled'} aria-label="prev">‹</button><h3>${dLong(d)}</h3><button class="btn sm" data-act="goDay" data-d="${next||d}" ${next?'':'disabled'} aria-label="next">›</button><span class="pill st-${st}">${stLabel(st)}</span></div>
  <div class="l"><label style="flex-direction:row;align-items:center;gap:6px">${L('Entrada','Start')}<select id="startSel" class="sel" style="width:auto" ${st==='done'?'disabled':''}>${[360,390,420,450].map(v=>`<option value="${v}" ${startOf(d)===v?'selected':''}>${fT(v)}</option>`).join('')}</select></label>
- ${st!=='done'&&META[d]&&dow(d)!==6?`<button class="btn" data-act="suggest">${L('Sugerir equipos','Suggest crews')}</button>`:''}
+ ${st!=='done'&&!S.published[d]&&d>=TODAY?`<button class="btn primary" data-act="genPlan">${L('Generar plan','Generate plan')}</button>`:''}
+ ${st!=='done'&&META[d]&&!tonly(d)?`<button class="btn" data-act="suggest">${L('Sugerir equipos','Suggest crews')}</button>`:''}
  ${d===NEXT&&!S.published[d]?`<button class="btn primary" data-act="publish">${L('Publicar plan','Publish plan')}</button>`:''}</div></div>`;
  if(st==='draft')h+=`<p class="muted" style="margin:0">${L('Borrador. Se publica el día anterior, después de tu revisión.','Draft. It gets published the day before, after your review.')}</p>`;
  if(st==='published'&&d>TODAY)h+=`<p class="muted lv-good" style="margin:0">${L('Publicado. El equipo ya lo ve en su teléfono y en el kiosko.','Published. The team can see it on their phones and the kiosk.')}</p>`;
@@ -589,14 +600,12 @@ function mDay(){
  if(m.note)h+=`<div class="callout" style="background:var(--surface-2);border-color:var(--line)"><div><b>${L('Nota del día','Day note')}: ${L(m.note[0],m.note[1])}</b></div></div>`;
  h+=sheetView(d,st);
  if(st!=='done'){
-  const msgs=P.map(p=>({p,m:msgFor(p,d)})).filter(x=>x.m);
-  h+=`<details class="msgs" ${d===NEXT&&!S.published[d]?'open':''}><summary>${L('Vista previa de mensajes (aún no se envían solos)','Message preview (not sent automatically yet)')} (${msgs.length})</summary><p class="muted">${L('Texto listo para copiar y mandar por WhatsApp. Cada persona ve su plan en la app al publicar.','Text ready to copy and send by WhatsApp. Each person sees their plan in the app once you publish.')}</p><div class="msglist">${msgs.map(x=>`<div class="bubble"><b>→ ${x.p.name}</b>${esc(x.m)}<br><button class="btn sm ghost" data-act="copyMsg" data-p="${x.p.id}">${L('Copiar','Copy')}</button></div>`).join('')}</div></details>`;
  }
  return h;
 }
 const whenMark=w=>({first:'①',during:'②',end:'③'})[w];
 function areaCard(d,a){
- const c=crew(d,a),need=areaNeed(d,a),units=areaUnits(d,a),e=estEnd(d,a),lv=level(d,a),m=META[d]||{};
+ const c=crewH(d,a),need=areaNeed(d,a),units=areaUnits(d,a),e=estEnd(d,a),lv=level(d,a),m=META[d]||{};
  let h=`<div class="acard b-${a}"><div class="acard-h">${chip(a)}<span>${c.length} ${L('personas','people')}</span></div>`;
  if(units!=null)h+=`<div class="big">${n0(units)} <small>${L('unidades','units')}</small></div>`;
  if(a==='REC'&&m.from)h+=`<div class="muted">${L('Llega','Incoming')}: <b>${m.from}</b></div>`;
@@ -611,14 +620,75 @@ function offCard(d){
  return `<div class="acard b-OFF"><div class="acard-h"><span class="chip a-REST">${L('Fuera','Out')}</span><span>${rest.length+vac.length}</span></div>
  <div><span class="muted">${L('Descansan','Day off')}:</span><div class="names">${rest.map(p=>`<span class="nm">${p.name}</span>`).join('')||'—'}</div></div>
  <div><span class="muted">${L('Vacaciones','Vacation')}:</span><div class="names">${vac.map(p=>`<span class="nm">${p.name}</span>`).join('')||'—'}</div></div>
+ ${partChips(d)?`<div><span class="muted">${L('Parcial','Partial')}:</span><div class="names">${partChips(d)}</div></div>`:''}
  ${pend.length?`<div class="w warn">${L('Pendiente de aprobar','Pending approval')}: ${pend.map(p=>p.name).join(', ')}</div>`:''}</div>`;
 }
-const WHEN_ORDER={first:0,during:1,end:2};
-const whenL=w=>({first:L('Primero','First thing'),during:L('Durante el día','During day'),end:L('Antes de salir','Before leaving')})[w];
+const WHEN_ORDER={first:0,time:1,during:2,end:3};
+const WHENS=['first','time','during','end'];
+const timeSel=(cls,cur,extra)=>`<select class="${cls}" ${extra||''} aria-label="time">${Array.from({length:61},(_,i)=>360+i*15).map(v=>`<option value="${v}" ${v===(cur||480)?'selected':''}>${fT(v)}</option>`).join('')}</select>`;
+const whenL=w=>({first:L('Primero','First thing'),time:L('A una hora exacta','Specific time'),during:L('Durante el día','During day'),end:L('Antes de salir','Before leaving')})[w];
+function genBar(days){return days.some(d=>d>=TODAY&&!S.published[d])?`<div style="margin:0 0 10px"><button class="btn primary" data-act="genWeek">${L('Generar plan de la semana','Generate week plan')}</button> <span class="muted" style="font-size:13px">${L('Llena los días en borrador con las reglas de Equipo y puestos > Plan automático.','Fills the draft days using Team & jobs > Auto plan rules.')}</span></div>`:''}
+function reqStrip(days){
+ const nr=S.reqs.filter(r=>r.status==='new').sort((a,b)=>a.pri-b.pri||(a.due||'9999').localeCompare(b.due||'9999'));
+ const ds=days.filter(d=>d>=TODAY&&dow(d)!==0);if(!nr.length||!ds.length)return '';
+ return `<div class="card" style="margin:0 0 10px"><b>${L('Solicitudes pendientes','Pending requests')} (${nr.length})</b><div class="reqs">${nr.map(r=>{const d0=ds.includes(r.due)?r.due:(ds.includes(NEXT)?NEXT:ds[0]);return `<form class="req wreq" data-form="wreq" data-id="${r.id}" style="grid-template-columns:auto minmax(0,1fr)"><div class="pri pri${r.pri}">P${r.pri}</div><div><h4>${esc(L(r.es,r.en))}</h4><div class="meta"><span>${L('De','From')}: <b>${esc(r.from)}</b> · ${esc(r.team)}</span><span>${L('Para','Due')}: <b>${dMD(r.due)}</b></span><span>${r.est} min</span></div><div class="addtask" style="margin-top:6px"><select name="p" aria-label="person">${personOpts(d0,'','— '+L('Persona','Person')+' —').replace(/<option value="ALL">[^<]*<\/option>/,'')}</select><select name="d" aria-label="day">${ds.map(d=>`<option value="${d}" ${d===d0?'selected':''}>${dShort(d)}${d===r.due?' ★':''}</option>`).join('')}</select><button class="btn primary sm">${L('Asignar','Assign')}</button></div></div></form>`}).join('')}</div></div>`;
+}
+function quickBar(days){
+ const ds=days.filter(d=>d>=TODAY&&!ro0(d));if(!ds.length)return '';
+ const q=S.quick||{},d0=ds.includes(q.d)?q.d:(ds.includes(NEXT)?NEXT:ds[0]);
+ return `<form class="addtask quick" data-form="quick" style="margin:0 0 10px"><input name="t" id="qa-t" value="${esc(q.t||'')}" placeholder="${L('Nueva tarea rápida, ej. Soplar el techo','Quick task, e.g. Blow the roof')}" required><select name="p" id="qa-p" aria-label="person">${personOpts(d0,q.p||'','— '+L('Persona','Person')+' —')}</select><select name="d" id="qa-d" aria-label="day">${ds.map(d=>`<option value="${d}" ${d===d0?'selected':''}>${dShort(d)}</option>`).join('')}</select><button class="btn primary sm">+ ${L('Agregar','Add')}</button></form>`;
+}
+const ro0=d=>d<TODAY;
+const workingOn=d=>P.filter(p=>!['REST','VAC','NONE'].includes(areaOf(p.id,d)));
+function addForAll(d,min,when,es,en,src,note,from,tm){const ws=workingOn(d);if(!ws.length){toast(L('Nadie trabaja ese día.','No one is working that day.'),4000);render();return null}
+ return ws.map(q=>{const x=addTask(q.id,d,min,when,es,en,src,note,from);x.tm=tm||0;op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:x.es,en:x.en,src:x.src,tm:x.tm});return x})}
+function offWhy(pid,d){const a=areaOf(pid,d);return a==='VAC'?'VAC':(a==='REST'&&dow(d)!==6?'REST':'')}
+function offLabel(pid,d){const w=offWhy(pid,d);return w==='VAC'?' ('+L('vacaciones','vacation')+')':w==='REST'?' ('+L('día libre','day off')+')':''}
+function offGuard(pid,d){const w=pid?offWhy(pid,d):'';if(!w)return true;
+ toast(L(`${PM[pid].name} está ${w==='VAC'?'de vacaciones':'libre'} el ${dShort(d)} y no se le puede asignar una tarea.`,`${PM[pid].name} is ${w==='VAC'?'on vacation':'off'} on ${dShort(d)} and cannot be assigned to a task.`),5500);render();return false}
 function personOpts(d,cur,blank,short){
- let o=`<option value="">${blank}</option>`;
- for(const p of P){const a=areaOf(p.id,d);if((a==='VAC')&&p.id!==cur)continue;o+=`<option value="${p.id}" ${p.id===cur?'selected':''}>${p.name}${short?(['REST','NONE'].includes(a)?' ('+aS(a).toLowerCase()+')':''):' · '+aS(a)}</option>`}
+ let o=`<option value="">${blank}</option><option value="ALL">★ ${L('Todos los que trabajan','All working')}</option>`;
+ for(const p of P){const a=areaOf(p.id,d),ol=offLabel(p.id,d);o+=`<option value="${p.id}" ${p.id===cur?'selected':''}>${p.name}${ol||(short?(['REST','NONE'].includes(a)?' ('+aS(a).toLowerCase()+')':''):' · '+aS(a))}</option>`}
  return o;
+}
+// ---- truck roles (Receiving, FL / CA)
+function trRoles(){return ((S.truck&&S.truck.roles)||[]).filter(r=>r.active).sort((a,b)=>a.sort-b.sort)}
+function trOrigins(d){const f=((META[d]&&META[d].from)||'').split('/').map(x=>x.trim());return ['FL','CA'].filter(o=>f.includes(o))}
+function trPeople(d,o,rid){return (((S.truck||{}).crew||{})[d]||[]).filter(x=>x[0]===o&&x[1]===rid).map(x=>x[2])}
+function trSet(d,o,rid,pid,on){S.truck=S.truck||{roles:[],crew:{}};const c=S.truck.crew=S.truck.crew||{},l=c[d]=c[d]||[],i=l.findIndex(x=>x[0]===o&&x[1]===rid&&x[2]===pid);
+ if(on&&i<0)l.push([o,rid,pid]);if(!on&&i>=0)l.splice(i,1);op('truckCrewSet',{date:d,origin:o,role:rid,pid,on:!!on})}
+function truckBlock(d,ro){
+ const os=trOrigins(d);if(!os.length)return '';
+ const rs=trRoles(),ids0=crew(d,'REC').map(p=>p.id);let h='';
+ for(const o of os){
+  h+=`<table class="sh blk" style="margin-top:12px"><tbody><tr class="shh"><th colspan="2">${o} · ${L('Puestos del camión','Truck roles')}</th></tr>`;
+  if(!rs.length)h+=`<tr><td colspan="2" class="muted">${L('Agrega puestos en Equipo y puestos > Puestos del camión.','Add positions in Team & jobs > Truck Roles.')}</td></tr>`;
+  else if(!ids0.length&&!ro)h+=`<tr><td colspan="2" class="muted">${L('Primero pon gente en el equipo de Recibo.','First put people on the Receiving team.')}</td></tr>`;
+  for(const r of rs){const ids=trPeople(d,o,r.id),free=ids0.filter(x=>!ids.includes(x));
+   h+=`<tr><th>${esc(r.name)}</th><td>${ids.map(x=>`<span class="nm">${PM[x].name}${ro?'':`<button class="x" data-act="trOff" data-d="${d}" data-o="${o}" data-r="${r.id}" data-p="${x}" aria-label="remove">×</button>`}</span>`).join('')}${ro||!free.length?'':`<select class="trAdd" data-d="${d}" data-o="${o}" data-r="${r.id}" aria-label="${esc(r.name)}"><option value="">+ ${L('Agregar','Add')}</option>${free.map(x=>`<option value="${x}">${PM[x].name}</option>`).join('')}</select>`}</td></tr>`}
+  h+=`</tbody></table>`}
+ return h;
+}
+function tMove(id,dir){const t=S.tasks.find(x=>x.id===id);if(!t||!t.pid)return;
+ const g=S.tasks.filter(x=>x.pid===t.pid&&x.date===t.date&&x.when===t.when).sort((a,b)=>(a.sort||0)-(b.sort||0)),i=g.indexOf(t),j=i+dir;if(j<0||j>=g.length)return;
+ g.splice(i,1);g.splice(j,0,t);g.forEach((x,k)=>{if((x.sort||0)!==k+1){x.sort=k+1;op('taskUpdate',{id:x.id,sort:x.sort})}})}
+function rMove(id,dir){const r=S.recurring.find(x=>x.id===id);if(!r)return;
+ const g=S.recurring.filter(x=>x.pid===r.pid&&x.when===r.when&&x.days.some(w=>r.days.includes(w))).sort((a,b)=>(a.sort||0)-(b.sort||0)),i=g.indexOf(r),j=i+dir;if(j<0||j>=g.length)return;
+ g.splice(i,1);g.splice(j,0,r);g.forEach((x,k)=>{if((x.sort||0)!==k+1){x.sort=k+1;op('recUpdate',{id:x.id,sort:x.sort});regen(x)}})}
+function trMove(id,dir){const a=S.truck.roles.filter(r=>r.active).sort((x,y)=>x.sort-y.sort),i=a.findIndex(r=>r.id===id),j=i+dir;if(i<0||j<0||j>=a.length)return;
+ const x=a[i],y=a[j],t=x.sort;x.sort=y.sort;y.sort=t;if(x.sort===y.sort){x.sort=j+1;y.sort=i+1}op('truckRoleUpdate',{id:x.id,sort:x.sort});op('truckRoleUpdate',{id:y.id,sort:y.sort})}
+function trLine(pid,d){const l=(((S.truck||{}).crew||{})[d]||[]).filter(x=>x[2]===pid);if(!l.length)return '';
+ const rm=Object.fromEntries(((S.truck&&S.truck.roles)||[]).map(r=>[r.id,r.name]));
+ return `<div class="goal">${L('Tu puesto en el camión','Your truck position')}: <b>${l.map(x=>esc(rm[x[1]]||'?')+' · '+x[0]).join(', ')}</b></div>`}
+function truckEditor(){
+ const rs=((S.truck&&S.truck.roles)||[]).slice().sort((a,b)=>a.sort-b.sort),act=rs.filter(r=>r.active);
+ let h=`<p class="muted" style="margin:0">${L('Estos puestos se asignan en el Plan del día, en Recibo, cuando llega un camión de FL o CA.','These positions are assigned in the Day plan, under Receiving, when an FL or CA truck arrives.')}</p>`;
+ h+=`<div class="scroll-x"><table class="sh" style="min-width:520px"><thead><tr class="shh"><th colspan="3">Truck Roles<span class="shcount">${act.length}</span></th></tr></thead><tbody>`;
+ for(const r of rs){const i=act.indexOf(r);
+  h+=`<tr style="${r.active?'':'opacity:.55'}"><td><input class="trname" data-id="${r.id}" value="${esc(r.name)}" maxlength="40" aria-label="name"></td><td style="width:110px">${r.active?`<button class="btn sm" data-act="trUp" data-id="${r.id}" ${i<=0?'disabled':''} aria-label="up">↑</button> <button class="btn sm" data-act="trDown" data-id="${r.id}" ${i>=act.length-1?'disabled':''} aria-label="down">↓</button>`:''}</td><td style="width:120px"><button class="btn sm" data-act="trToggle" data-id="${r.id}">${r.active?L('Quitar','Remove'):L('Restaurar','Restore')}</button></td></tr>`}
+ h+=`</tbody></table></div>`;
+ h+=`<form class="newreq" data-form="newrole"><label class="full">${L('Nuevo puesto','New position')}<input id="nr-n" name="n" required maxlength="40" placeholder="${L('Ej. Scanner','e.g. Scanner')}"></label><div class="full"><button class="btn primary" type="submit">${L('Agregar puesto','Add position')}</button></div></form>`;
+ return h;
 }
 function sheetView(d,st){
  const ro=st==='done';
@@ -626,44 +696,46 @@ function sheetView(d,st){
  const nm=(p,act)=>`<span class="nm">${p.name}${act&&!ro?`<button class="x" data-act="${act}" data-p="${p.id}" aria-label="remove">×</button>`:''}</span>`;
  let h=`<div class="sheet"><table class="sh"><tbody><tr class="shh"><th colspan="2">${L('Fuera','Out')}</th></tr>
  <tr><th>${L('Vacaciones / tiempo pedido','Vacation / time requested')}</th><td>${vac.map(p=>nm(p)).join('')||'<span class="muted">—</span>'}</td></tr>
+ ${partChips(d)?`<tr><th>${L('Sale temprano / entra tarde','Leaves early / comes in late')}</th><td>${partChips(d)}</td></tr>`:''}
  ${pend.length?`<tr><th>${L('Pendiente de aprobar','Pending approval')}</th><td>${pend.map(p=>`<span class="nm pendn">${p.name}</span>`).join('')} <button class="btn sm ghost" data-act="mtab" data-v="off">${L('Revisar','Review')}</button></td></tr>`:''}
  <tr><th>${L('Quién descansa','Day off')}</th><td>${rest.map(p=>nm(p,'unrest')).join('')||'<span class="muted">—</span>'} ${ro?'':`<select class="sel addsel" id="addRest" aria-label="add"><option value="">+ ${L('Agregar','Add')}</option>${P.filter(p=>!['REST','VAC'].includes(areaOf(p.id,d))).map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>`}</td></tr>
  ${none.length?`<tr class="warnrow"><th>${L('Sin asignar','Not assigned')}</th><td>${none.map(p=>nm(p)).join('')} ${L('Ponlos en una tarea o en un equipo abajo.','Put them on a task or a crew below.')}</td></tr>`:''}
  </tbody></table>`;
- const ts=S.tasks.filter(t=>t.date===d).sort((a,b)=>WHEN_ORDER[a.when]-WHEN_ORDER[b.when]);
+ const ts=S.tasks.filter(t=>t.date===d).sort((a,b)=>WHEN_ORDER[a.when]-WHEN_ORDER[b.when]||(a.sort||0)-(b.sort||0)||(a.tm||0)-(b.tm||0));
  const unas=ts.filter(t=>!t.pid).length,newReqs=S.reqs.filter(r=>r.status==='new');
  h+=`<div class="scroll-x" data-keep="shtasks"><table class="sh" style="min-width:660px"><thead><tr class="shh"><th colspan="5">${L('Tareas','Tasks')}<span class="shcount">${ts.length}${unas?` · ${unas} ${L('sin persona','without a person')}`:''}</span></th></tr>
- <tr class="shc"><th>${L('Tarea','Task')}</th><th style="width:160px">${L('Cuándo','When')}</th><th style="width:84px">Min</th><th style="width:180px">${L('Persona','Person')}</th><th style="width:36px"></th></tr></thead><tbody>`;
+ <tr class="shc"><th>${L('Tarea','Task')}</th><th style="width:160px">${L('Cuándo','When')}</th><th style="width:84px">Min</th><th style="width:180px">${L('Persona','Person')}</th><th style="width:84px"></th></tr></thead><tbody>`;
  for(const t of ts){
   h+=`<tr class="${t.pid?'':'unas'}"><td>${esc(title(t))}${t.src==='req'?`<small class="reqsrc">${L('Solicitud de','Request from')} ${esc(t.from)}</small>`:''}</td>
-  <td><select class="tw" data-id="${t.id}" ${ro?'disabled':''} aria-label="when">${['first','during','end'].map(w=>`<option value="${w}" ${t.when===w?'selected':''}>${whenL(w)}</option>`).join('')}</select></td>
+  <td><select class="tw" data-id="${t.id}" ${ro?'disabled':''} aria-label="when">${WHENS.map(w=>`<option value="${w}" ${t.when===w?'selected':''}>${whenL(w)}</option>`).join('')}</select>${t.when==='time'?timeSel('ttm',t.tm,`data-id="${t.id}" ${ro?'disabled':''}`):''}</td>
   <td><input class="tmin" type="number" min="5" step="5" value="${t.min}" data-id="${t.id}" ${ro?'disabled':''} aria-label="minutes"></td>
   <td><select class="tperson" data-id="${t.id}" ${ro?'disabled':''} aria-label="person">${personOpts(d,t.pid,'— '+L('Sin asignar','Unassigned')+' —')}</select></td>
-  <td>${ro?'':`<button class="x" data-act="rmTask" data-id="${t.id}" aria-label="remove">×</button>`}</td></tr>`;
+  <td style="white-space:nowrap">${ro?'':`${t.pid?`<button class="x" data-act="tUp" data-id="${t.id}" aria-label="up" title="${L('Subir','Move up')}">↑</button><button class="x" data-act="tDown" data-id="${t.id}" aria-label="down" title="${L('Bajar','Move down')}">↓</button>`:''}<button class="x" data-act="rmTask" data-id="${t.id}" aria-label="remove">×</button>`}</td></tr>`;
  }
- if(!ro)h+=`<tr class="addrow"><td colspan="5"><form class="addtask" data-form="addtask"><input name="t" id="nt-t" placeholder="${L('Nueva tarea, ej. Soplar área de shipping','New task, e.g. Blow out the shipping area')}" required><select name="w" id="nt-w" aria-label="when">${['first','during','end'].map(w=>`<option value="${w}" ${w==='during'?'selected':''}>${whenL(w)}</option>`).join('')}</select><input name="m" id="nt-m" type="number" min="5" step="5" value="30" aria-label="minutes"><select name="p" id="nt-p" aria-label="person">${personOpts(d,'','— '+L('Persona','Person')+' —')}</select><button class="btn primary sm">+ ${L('Agregar','Add')}</button></form>${newReqs.length?`<div class="pullrow"><select id="pullReq" class="sel" aria-label="request"><option value="">+ ${L('Traer una solicitud de otro equipo','Pull in a request from another team')} (${newReqs.length})</option>${newReqs.map(r=>`<option value="${r.id}">P${r.pri} · ${esc(L(r.es,r.en))} · ${r.est} min</option>`).join('')}</select></div>`:''}</td></tr>`;
+ if(!ro)h+=`<tr class="addrow"><td colspan="5"><form class="addtask" data-form="addtask"><input name="t" id="nt-t" placeholder="${L('Nueva tarea, ej. Soplar área de shipping','New task, e.g. Blow out the shipping area')}" required><select name="w" id="nt-w" aria-label="when">${WHENS.map(w=>`<option value="${w}" ${w==='during'?'selected':''}>${whenL(w)}</option>`).join('')}</select><span class="tmpick" style="display:none">${timeSel('',480,'name="tm"')}</span><input name="m" id="nt-m" type="number" min="5" step="5" value="30" aria-label="minutes"><select name="p" id="nt-p" aria-label="person">${personOpts(d,'','— '+L('Persona','Person')+' —')}</select><button class="btn primary sm">+ ${L('Agregar','Add')}</button></form>${newReqs.length?`<div class="pullrow"><select id="pullReq" class="sel" aria-label="request"><option value="">+ ${L('Traer una solicitud de otro equipo','Pull in a request from another team')} (${newReqs.length})</option>${newReqs.map(r=>`<option value="${r.id}">P${r.pri} · ${esc(L(r.es,r.en))} · ${r.est} min</option>`).join('')}</select></div>`:''}</td></tr>`;
  h+=`</tbody></table></div>`;
- if(dow(d)===6)return h+`<p class="muted" style="margin:0">${L('Sábado: solo se planean tareas. Quien tiene una tarea trabaja; los demás descansan.','Saturday: only tasks are planned. Anyone with a task works; everyone else is off.')}</p></div>`;
+ if(tonly(d))return h+`<div class="sheet-cols3">${areaBlock(d,'COUNT',ro,2)}</div><p class="muted" style="margin:0">${dow(d)===0?L('Domingo: solo se planean tareas. Solo trabaja quien tiene Domingo activado en Equipo y puestos.','Sunday: only tasks are planned. Only people set to work Sundays in Team & jobs can be scheduled; everyone else is off.'):L('Sábado: se planean tareas y Conteo cíclico. Quien tiene una tarea o está en Conteo trabaja; los demás descansan.','Saturday: tasks and Count cycle are planned. Anyone with a task or in Count works; everyone else is off.')}</p></div>`;
  h+=`<div class="sheet-cols">${areaBlock(d,'OF',ro,6)}${areaBlock(d,'REC',ro,6)}</div>`;
- const others=['WATER','GEN','COUNT'].filter(a=>a!=='COUNT'||crew(d,a).length);
+ const others=['WATER','COUNT'].filter(a=>a!=='COUNT'||crew(d,a).length);
  return h+`<div class="sheet-cols3">${others.map(a=>areaBlock(d,a,ro,2)).join('')}</div></div>`;
 }
 function areaBlock(d,a,ro,min){
- const c=crew(d,a),need=areaNeed(d,a),units=areaUnits(d,a),e=estEnd(d,a),lv=level(d,a),m=META[d]||{};
+ const c=a==='WATER'?wcrew(d):crew(d,a),ch=crewH(d,a),need=areaNeed(d,a),units=areaUnits(d,a),e=estEnd(d,a),lv=level(d,a),m=META[d]||{};
  const ttl={OF:L('Sacar órdenes','Pull orders'),REC:L('Recibo · CT In & Out','Receiving · CT In & Out')}[a]||aL(a);
  let rows='';
  if(units!=null)rows+=`<tr><th>${L('Unidades totales','Total units')}</th><td><b>${n0(units)}</b></td></tr>`;
  if(a==='REC'&&m.from)rows+=`<tr><th>${L('Llega','Incoming')}</th><td>${m.from}</td></tr>`;
- if(need!=null)rows+=`<tr><th>${L('Horas necesarias','Hours needed')}</th><td>${need.toFixed(1)} h</td></tr><tr><th>${L('Horas del equipo','Crew hours')}</th><td>${areaHave(d,a).toFixed(1)} h</td></tr><tr><th>${L('Hora de fin','Target end time')}</th><td class="lv-${lv}"><b>${need===0?(c.length?L('Sin trabajo – mueve gente','No work – move people'):'—'):(e?fT(e):L('Sin equipo','No crew'))}</b></td></tr>`;
+ if(need!=null)rows+=`<tr><th>${L('Horas necesarias','Hours needed')}</th><td>${need.toFixed(1)} h</td></tr><tr><th>${L('Horas del equipo','Crew hours')}</th><td>${areaHave(d,a).toFixed(1)} h</td></tr><tr><th>${L('Hora de fin','Target end time')}</th><td class="lv-${lv}"><b>${need===0?(ch.length?L('Sin trabajo – mueve gente','No work – move people'):'—'):(e?fT(e):L('Sin equipo','No crew'))}</b></td></tr>`;
  else if((a==='OF'||a==='REC')&&!META[d])rows+=`<tr><th>${L('Pronóstico','Forecast')}</th><td class="muted">${L('Aún no disponible del ERP','Not available from the ERP yet')}</td></tr>`;
  const n=Math.max(min,c.length+(ro?0:1));
  let slots='';
  for(let i=0;i<n;i++){const p=c[i];slots+=`<tr><th class="slotn">${i+1}</th><td><select class="slot" data-a="${a}" data-cur="${p?p.id:''}" ${ro?'disabled':''} aria-label="${aS(a)} ${i+1}">${slotOpts(d,a,p?p.id:'')}</select></td></tr>`}
- let qc='';if(a==='OF'){const q=crew(d,'QC'),qn=Math.max(1,q.length+(ro?0:1));qc=`<tr class="shc"><th colspan="2">${chip('QC')} ${aL('QC')}</th></tr>`;for(let i=0;i<qn;i++){const pp=q[i];qc+=`<tr><th class="slotn">${i+1}</th><td><select class="slot" data-a="QC" data-cur="${pp?pp.id:''}" ${ro?'disabled':''} aria-label="QC ${i+1}">${slotOpts(d,'QC',pp?pp.id:'')}</select></td></tr>`}}
- return `<table class="sh blk b-${a}"><tbody><tr class="shh"><th colspan="2">${chip(a)} ${ttl}<span class="shcount">${c.length} ${c.length===1?L('persona','person'):L('personas','people')}</span></th></tr>${rows}<tr class="shc"><th colspan="2">${L('Equipo','Team members')}</th></tr>${slots}${qc}</tbody></table>`;
+ let qc='';if(a==='OF'){const q=crew(d,'QC'),qn=Math.max(1,q.length);qc=`<tr class="shc"><th colspan="2">${chip('QC')} ${aL('QC')}</th></tr>`;for(let i=0;i<qn;i++){const pp=q[i];qc+=`<tr><th class="slotn">${i+1}</th><td><select class="slot" data-a="QC" data-cur="${pp?pp.id:''}" ${ro?'disabled':''} aria-label="QC ${i+1}">${slotOpts(d,'QC',pp?pp.id:'')}</select></td></tr>`}}
+ return `<table class="sh blk b-${a}"><tbody><tr class="shh"><th colspan="2">${chip(a)} ${ttl}<span class="shcount">${ch.length} ${ch.length===1?L('persona','person'):L('personas','people')}</span></th></tr>${rows}<tr class="shc"><th colspan="2">${L('Equipo','Team members')}</th></tr>${slots}${qc}</tbody></table>${a==='REC'?truckBlock(d,ro):''}`;
 }
 function slotOpts(d,a,cur){
  let o=`<option value="">—</option>`;
+ if(a==='WATER')o+=`<option value="${NOR}" ${cur===NOR?'selected':''}>No Riego</option>`;
  for(const p of P){const pa=areaOf(p.id,d);if(pa==='VAC')continue;if(pa===a&&p.id!==cur)continue;o+=`<option value="${p.id}" ${p.id===cur?'selected':''}>${p.name}${p.id!==cur?` (${aS(pa).toLowerCase()})`:''}</option>`}
  return o;
 }
@@ -677,9 +749,9 @@ function calView(){
  for(let k=1;k<=dim;k++){
   const ds=`${y}-${pad(mo)}-${pad(k)}`,w=dow(ds);
   if(w===0){cells+=`<div class="dc closed"><div class="dn"><span>${k}</span><small>${L('Cerrado','Closed')}</small></div></div>`;continue}
-  const vac=P.filter(p=>areaOf(p.id,ds)==='VAC'),pend=P.filter(p=>pendingOn(p.id,ds)&&areaOf(p.id,ds)!=='VAC'),rest=w===6?[]:P.filter(p=>areaOf(p.id,ds)==='REST');
+  const vac=P.filter(p=>areaOf(p.id,ds)==='VAC'),pend=P.filter(p=>pendingOn(p.id,ds)&&areaOf(p.id,ds)!=='VAC'),rest=(w===6||w===0)?[]:P.filter(p=>areaOf(p.id,ds)==='REST');
   const n=vac.length+pend.length+rest.length,cls=n>=4?'hi':n>=3?'mid':'',inPlan=ALLDAYS.includes(ds),tag=inPlan?'button':'div';
-  cells+=`<${tag} class="dc ${cls} ${ds===TODAY?'today':''}" ${inPlan?`data-act="goDay" data-d="${ds}"`:''}><div class="dn"><span>${k}</span>${n&&w!==6?`<small>${n} ${L('fuera','out')}</small>`:''}</div>${vac.map(p=>`<span class="chip a-VAC">${p.name}</span>`).join('')}${pend.map(p=>`<span class="chip pendc">${p.name} · ${L('pend.','pending')}</span>`).join('')}${rest.length?`<span class="more">${L('Descansan','Day off')}: ${rest.map(p=>p.name).join(', ')}</span>`:''}${w===6?`<span class="more">${L('Sábado: equipo pequeño','Saturday: small crew')}</span>`:''}</${tag}>`;
+  cells+=`<${tag} class="dc ${cls} ${ds===TODAY?'today':''}" ${inPlan?`data-act="goDay" data-d="${ds}"`:''}><div class="dn"><span>${k}</span>${n&&w!==6&&w!==0?`<small>${n} ${L('fuera','out')}</small>`:''}</div>${vac.map(p=>`<span class="chip a-VAC">${p.name}</span>`).join('')}${pend.map(p=>`<span class="chip pendc">${p.name} · ${L('pend.','pending')}</span>`).join('')}${rest.length?`<span class="more">${L('Descansan','Day off')}: ${rest.map(p=>p.name).join(', ')}</span>`:''}${w===6?`<span class="more">${L('Sábado: equipo pequeño','Saturday: small crew')}</span>`:''}</${tag}>`;
  }
  for(let i=lead+dim;i%7;i++)cells+=`<div class="dc blank"></div>`;
  return `<div class="row-between"><h3 style="font-size:22px">${L('Calendario de cobertura','Coverage calendar')}</h3><div class="calhead"><button class="btn sm" data-act="calNav" data-v="-1" aria-label="previous month">‹</button><h3>${mname}</h3><button class="btn sm" data-act="calNav" data-v="1" aria-label="next month">›</button><button class="btn sm ghost" data-act="calToday">${L('Hoy','Today')}</button></div></div>
@@ -757,24 +829,26 @@ function mOff(){
  const pend=S.off.filter(o=>o.status==='pending');
  let h=`<h3 style="font-size:22px">${L('Por aprobar','To approve')} (${pend.length})</h3>`;
  if(!pend.length)h+=`<p class="muted">${L('Todo al día. Las nuevas solicitudes del equipo aparecen aquí.','All caught up. New requests from the team show up here.')}</p>`;
- h+=`<div class="reqs">${pend.map(o=>`<div class="req" style="grid-template-columns:minmax(0,1fr) auto"><div><h4>${PM[o.pid].name} · ${typeL(o.type)} · ${rangeTxt(o)}</h4>${o.note?`<div class="meta">“${esc(o.note)}”</div>`:''}<div class="warns">${offWarn(o).map(x=>`<span class="w ${x[0]}">${x[1]}</span>`).join('')}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary sm" data-act="offOk" data-id="${o.id}">${L('Aprobar','Approve')}</button><button class="btn danger sm" data-act="offNo" data-id="${o.id}">${L('No aprobar','Deny')}</button></div></div>`).join('')}</div>`;
+ h+=`<div class="reqs">${pend.map(o=>`<div class="req" style="grid-template-columns:minmax(0,1fr) auto"><div><h4>${PM[o.pid].name} · ${typeO(o)} · ${rangeTxt(o)}</h4>${o.note?`<div class="meta">“${esc(o.note)}”</div>`:''}<div class="warns">${offWarn(o).map(x=>`<span class="w ${x[0]}">${x[1]}</span>`).join('')}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary sm" data-act="offOk" data-id="${o.id}">${L('Aprobar','Approve')}</button><button class="btn danger sm" data-act="offNo" data-id="${o.id}">${L('No aprobar','Deny')}</button></div></div>`).join('')}</div>`;
  h+=calView();
  const rest=S.off.filter(o=>o.status!=='pending').sort((a,b)=>a.start.localeCompare(b.start));
- h+=`<h3 style="font-size:22px">${L('Aprobadas y anteriores','Approved & past')}</h3><div class="scroll-x"><table class="tbl" style="min-width:520px"><thead><tr><th>${L('Persona','Person')}</th><th>${L('Tipo','Type')}</th><th>${L('Fechas','Dates')}</th><th>${L('Nota','Note')}</th><th>${L('Estado','Status')}</th></tr></thead><tbody>${rest.map(o=>`<tr><td><b>${PM[o.pid].name}</b></td><td>${typeL(o.type)}</td><td>${rangeTxt(o)}</td><td class="muted">${esc(o.note||'')}</td><td><span class="pill s-${o.status}">${offL(o.status)}</span></td></tr>`).join('')}</tbody></table></div>`;
+ h+=`<h3 style="font-size:22px">${L('Aprobadas y anteriores','Approved & past')}</h3><div class="scroll-x"><table class="tbl" style="min-width:520px"><thead><tr><th>${L('Persona','Person')}</th><th>${L('Tipo','Type')}</th><th>${L('Fechas','Dates')}</th><th>${L('Nota','Note')}</th><th>${L('Estado','Status')}</th></tr></thead><tbody>${rest.map(o=>`<tr><td><b>${PM[o.pid].name}</b></td><td>${typeO(o)}</td><td>${rangeTxt(o)}</td><td class="muted">${esc(o.note||'')}</td><td><span class="pill s-${o.status}">${offL(o.status)}</span></td></tr>`).join('')}</tbody></table></div>`;
  return h;
 }
 function mTeam(){
  const p=PM[S.teamSel];
- const tabs=`<div class="seg" style="align-self:flex-start">${[['people',L('Personas y puestos','People & jobs')],['rec',L('Tareas recurrentes','Recurring tasks')]].map(t=>`<button class="${S.teamTab===t[0]?'on':''}" data-act="teamTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>`;
+ const tabs=`<div class="seg" style="align-self:flex-start">${[['people',L('Personas y puestos','People & jobs')],['rec',L('Tareas recurrentes','Recurring tasks')],['truck',L('Puestos del camión','Truck Roles')],['auto',L('Plan automático','Auto plan')]].map(t=>`<button class="${S.teamTab===t[0]?'on':''}" data-act="teamTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>`;
  if(S.teamTab==='rec')return tabs+recEditor();
+ if(S.teamTab==='truck')return tabs+truckEditor();
+ if(S.teamTab==='auto')return tabs+autoEditor();
  return tabs+`<div class="team-grid"><div class="plist">${P.map(q=>`<button class="${q.id===S.teamSel?'on':''}" data-act="teamSel" data-p="${q.id}"><span><b>${q.name}</b><br><span class="muted" style="font-size:12px">${L(jt(q.job,'es'),jt(q.job,'en'))}</span></span>${chip(q.home)}</button>`).join('')}</div>
- <div class="card"><div class="row-between" style="margin-bottom:8px"><span class="muted">${roleLabel(p)} · ${L('Descansa','Day off')}: ${p.rest.map(r=>fD(addDays('2026-10-11',r),{weekday:'short'}).replace('.','')).join(', ')||'—'}${p.satWork?' · '+L('Trabaja sábado','Works Saturday'):''}</span><button class="btn sm" data-act="teamEdit">${S.teamEdit?L('Cancelar','Cancel'):L('Editar','Edit')}</button></div>${S.teamEdit?teamForm(p):jobView(p.job)}</div></div>`;
+ <div class="card"><div class="row-between" style="margin-bottom:8px"><span class="muted">${roleLabel(p)} · ${L('Descansa','Day off')}: ${p.rest.map(r=>fD(addDays('2026-10-11',r),{weekday:'short'}).replace('.','')).join(', ')||'—'}${p.satWork?' · '+L('Trabaja sábado','Works Saturday'):''}${p.sunWork?' · '+L('Trabaja domingo','Works Sunday'):''}</span><button class="btn sm" data-act="teamEdit">${S.teamEdit?L('Cancelar','Cancel'):L('Editar','Edit')}</button></div>${S.teamEdit?teamForm(p):jobView(p.job)+recByDay(p)}</div></div>`;
 }
 function teamForm(p){
  const DN=[1,2,3,4,5,6],dl=w=>fD(addDays('2026-10-11',w),{weekday:'short'}).replace('.',''),hasJob=!!JOBS[p.job];
  const opt=(v,t,cur)=>`<option value="${v}" ${v===cur?'selected':''}>${t}</option>`;
  const jobOpts=Object.keys(JOBS).map(id=>opt(id,esc(jt(id,S.lang)),p.job)).join('');
- const areaOpts=['OF','REC','QC','WATER','GEN','COUNT','NONE'].map(a=>opt(a,aL(a),p.home||'NONE')).join('');
+ const areaOpts=['OF','REC','QC','WATER','COUNT','NONE'].map(a=>opt(a,aL(a),p.home||'NONE')).join('');
  const jl=lg=>{const j=(JOBS[p.job]||{})[lg]||EMPTYJ,T=lg==='es'?'Español':'English';
   return `<div class="full"><b>${T}</b></div>
   <label class="full">${L('Título del puesto','Job title')} (${T})<input name="t_${lg}" value="${esc(j.t==='—'?'':j.t)}"></label>
@@ -791,6 +865,7 @@ function teamForm(p){
   <label>${L('Área habitual','Home area')}<select name="home">${areaOpts}</select></label>
   <div class="full"><span class="muted" style="font-size:13px;font-weight:600">${L('Días de descanso','Days off')}</span><div class="days">${DN.map(w=>`<label class="dchk"><input type="checkbox" name="r${w}" ${p.rest.includes(w)?'checked':''}> ${dl(w)}</label>`).join('')}</div></div>
   <label class="dchk full"><input type="checkbox" name="satWork" ${p.satWork?'checked':''}> ${L('Trabaja los sábados','Works Saturdays')}</label>
+  <label class="dchk full"><input type="checkbox" name="sunWork" ${p.sunWork?'checked':''}> ${L('Trabaja los domingos','Works Sundays')}</label>
   ${hasJob?`<div class="full" style="margin-top:6px"><b>${L('Descripción del puesto','Job description')}</b><br><span class="muted">${L('Aplica a todas las personas con este puesto.','Applies to everyone with this job.')}</span></div>${jl('es')}${jl('en')}`:''}
   <div class="full"><button class="btn primary" type="submit">${L('Guardar','Save')}</button> <button class="btn" type="button" data-act="teamEdit">${L('Cancelar','Cancel')}</button></div>
  </form>`;
@@ -798,13 +873,22 @@ function teamForm(p){
 function recEditor(){
  const DN=[1,2,3,4,5,6],dl=w=>fD(addDays('2026-10-11',w),{weekday:'short'}).replace('.','');
  let h=`<p class="muted" style="margin:0">${L('Estas tareas aparecen solas en la sección Tareas de cada día. Los cambios aplican desde mañana. Las tareas de una sola vez se siguen agregando en el Plan del día.','These tasks show up on their own in each day\'s Tasks section. Changes apply from tomorrow. One-time tasks are still added in the Day plan.')}</p>`;
- h+=`<div class="scroll-x" data-keep="rec"><table class="sh rect" style="min-width:880px"><thead><tr class="shh"><th colspan="6">${L('Tareas recurrentes','Recurring tasks')}<span class="shcount">${S.recurring.length}</span></th></tr><tr class="shc"><th>${L('Tarea','Task')}</th><th style="width:300px">${L('Días','Days')}</th><th style="width:170px">${L('Persona','Person')}</th><th style="width:80px">Min</th><th style="width:150px">${L('Cuándo','When')}</th><th style="width:36px"></th></tr></thead><tbody>`;
+ h+=`<div class="scroll-x" data-keep="rec"><table class="sh rect" style="min-width:880px"><thead><tr class="shh"><th colspan="6">${L('Tareas recurrentes','Recurring tasks')}<span class="shcount">${S.recurring.length}</span></th></tr><tr class="shc"><th>${L('Tarea','Task')}</th><th style="width:300px">${L('Días','Days')}</th><th style="width:170px">${L('Persona','Person')}</th><th style="width:80px">Min</th><th style="width:150px">${L('Cuándo','When')}</th><th style="width:100px"></th></tr></thead><tbody>`;
  for(const r of S.recurring){
-  h+=`<tr><td><input class="rtitle" data-id="${r.id}" value="${esc(L(r.es,r.en))}" aria-label="task"></td><td><div class="days">${DN.map(w=>`<button class="dchip ${r.days.includes(w)?'on':''}" data-act="rday" data-id="${r.id}" data-w="${w}" aria-pressed="${r.days.includes(w)}">${dl(w)}</button>`).join('')}</div></td><td><select class="rperson" data-id="${r.id}" aria-label="person"><option value="">— ${L('Elegir cada día','Pick each day')} —</option>${P.map(p=>`<option value="${p.id}" ${r.pid===p.id?'selected':''}>${p.name}</option>`).join('')}</select></td><td><input class="rmin" type="number" min="5" step="5" value="${r.min}" data-id="${r.id}" aria-label="minutes"></td><td><select class="rwhen" data-id="${r.id}" aria-label="when">${['first','during','end'].map(w=>`<option value="${w}" ${r.when===w?'selected':''}>${whenL(w)}</option>`).join('')}</select></td><td><button class="x" data-act="rdel" data-id="${r.id}" aria-label="delete">×</button></td></tr>`;
+  h+=`<tr><td><input class="rtitle" data-id="${r.id}" value="${esc(L(r.es,r.en))}" aria-label="task"></td><td><div class="days">${DN.map(w=>`<button class="dchip ${r.days.includes(w)?'on':''}" data-act="rday" data-id="${r.id}" data-w="${w}" aria-pressed="${r.days.includes(w)}">${dl(w)}</button>`).join('')}</div></td><td><select class="rperson" data-id="${r.id}" aria-label="person"><option value="">— ${L('Elegir cada día','Pick each day')} —</option><option value="ALL" ${r.pid==='ALL'?'selected':''}>★ ${L('Todos','Everyone')}</option>${P.map(p=>`<option value="${p.id}" ${r.pid===p.id?'selected':''}>${p.name}</option>`).join('')}</select></td><td><input class="rmin" type="number" min="5" step="5" value="${r.min}" data-id="${r.id}" aria-label="minutes"></td><td><select class="rwhen" data-id="${r.id}" aria-label="when">${WHENS.map(w=>`<option value="${w}" ${r.when===w?'selected':''}>${whenL(w)}</option>`).join('')}</select>${r.when==='time'?timeSel('rtm',r.tm,`data-id="${r.id}"`):''}</td><td style="white-space:nowrap"><button class="x" data-act="rUp" data-id="${r.id}" aria-label="up" title="${L('Subir','Move up')}">↑</button><button class="x" data-act="rDown" data-id="${r.id}" aria-label="down" title="${L('Bajar','Move down')}">↓</button><button class="x" data-act="rdel" data-id="${r.id}" aria-label="delete">×</button></td></tr>`;
  }
  h+=`</tbody></table></div>`;
- h+=`<form class="newreq" data-form="newrec"><div class="full"><b>${L('Nueva tarea recurrente','New recurring task')}</b></div><label class="full">${L('Tarea','Task')}<input id="rr-t" name="t" required placeholder="${L('Ej. Revisar extintores','e.g. Check fire extinguishers')}"></label><div class="full"><span class="muted" style="font-size:13px;font-weight:600">${L('Días','Days')}</span><div class="days">${DN.map(w=>`<label class="dchk"><input type="checkbox" id="rr-d${w}" name="d${w}" ${w<=5?'checked':''}> ${dl(w)}</label>`).join('')}</div></div><label>${L('Persona','Person')}<select id="rr-p" name="p"><option value="">— ${L('Elegir cada día','Pick each day')} —</option>${P.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></label><label>Min<input id="rr-m" name="m" type="number" min="5" step="5" value="30"></label><label>${L('Cuándo','When')}<select id="rr-w" name="w">${['first','during','end'].map(w=>`<option value="${w}" ${w==='during'?'selected':''}>${whenL(w)}</option>`).join('')}</select></label><div class="full"><button class="btn primary">${L('Agregar tarea recurrente','Add recurring task')}</button></div></form>`;
+ h+=`<form class="newreq" data-form="newrec"><div class="full"><b>${L('Nueva tarea recurrente','New recurring task')}</b></div><label class="full">${L('Tarea','Task')}<input id="rr-t" name="t" required placeholder="${L('Ej. Revisar extintores','e.g. Check fire extinguishers')}"></label><div class="full"><span class="muted" style="font-size:13px;font-weight:600">${L('Días','Days')}</span><div class="days">${DN.map(w=>`<label class="dchk"><input type="checkbox" id="rr-d${w}" name="d${w}" ${w<=5?'checked':''}> ${dl(w)}</label>`).join('')}</div></div><label>${L('Persona','Person')}<select id="rr-p" name="p"><option value="">— ${L('Elegir cada día','Pick each day')} —</option><option value="ALL">★ ${L('Todos','Everyone')}</option>${P.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></label><label>Min<input id="rr-m" name="m" type="number" min="5" step="5" value="30"></label><label>${L('Cuándo','When')}<select id="rr-w" name="w">${WHENS.map(w=>`<option value="${w}" ${w==='during'?'selected':''}>${whenL(w)}</option>`).join('')}</select><span class="tmpick" style="display:none">${timeSel('',480,'name="tm"')}</span></label><div class="full"><button class="btn primary">${L('Agregar tarea recurrente','Add recurring task')}</button></div></form>`;
  return h;
+}
+function recByDay(p){
+ const rs=S.recurring.filter(r=>r.pid===p.id||r.pid==='ALL'),wo={first:0,during:1,end:2};
+ let h=`<div class="job"><h4>${L('Tareas recurrentes','Recurring tasks')}</h4>`;
+ if(!rs.length)return h+`<p class="muted" style="margin:0">—</p></div>`;
+ for(const w of [1,2,3,4,5,6]){
+  const l=rs.filter(r=>r.days.includes(w)).sort((a,b)=>wo[a.when]-wo[b.when]||(a.sort||0)-(b.sort||0));if(!l.length)continue;
+  h+=`<p style="margin:10px 0 2px"><b>${cap(fD(addDays('2026-10-11',w),{weekday:'long'}))}</b></p><ul>${l.map(r=>`<li>${whenMark(r.when)} ${esc(L(r.es,r.en))} <span class="muted">· ${r.min} min${r.pid==='ALL'?' · '+L('todos','everyone'):''}</span></li>`).join('')}</ul>`}
+ return h+`</div>`;
 }
 function jobView(job){
  const j=(JOBS[job]||{})[S.lang]||EMPTYJ;
@@ -819,24 +903,27 @@ function planCard(pid,d){
  const ts=dayTasks(pid,d),early=ts.some(t=>/Jail/.test(t.es)),units=areaUnits(d,a),e=estEnd(d,a);
  const sec=(w,lbl)=>{const l=ts.filter(t=>t.when===w);return l.length?`<div class="tsec"><h4>${lbl}</h4>${l.map(taskBtn).join('')}</div>`:''};
  return `<div class="plan"><div class="plan-date">${dLong(d)}</div>
+ ${META[d]&&META[d].note&&isPub(d)?`<div class="callout" style="background:var(--surface-2);border-color:var(--line)"><div><b>${L('Nota del día','Day note')}: ${L(META[d].note[0],META[d].note[1])}</b></div></div>`:''}
  <div class="arrive"><span>${L('Entrada','Start')}</span><b>${fT(early?startOf(d)-30:startOf(d))}</b>${early?`<small>${L('30 min antes por Jail y Banderas Blancas','30 min early for Jail & white flags')}</small>`:''}</div>
  <div class="band a-${a}"><small>${L('Te toca','You\'re on')}</small><b>${aL(a)}</b><span>${L('Repórtate con','Report to')} ${reportTo(p,a)}</span></div>
+ ${trLine(pid,d)}
  ${units?`<div class="goal">${L('Meta del equipo','Crew goal')}: <b>${n0(units)} ${L('unidades','units')}</b>${e?` · ${L('terminar','finish')} ~<b>${fT(e)}</b>`:''}${a==='REC'&&META[d]&&META[d].from?` · ${L('llega','from')} ${META[d].from}`:''}</div>`:''}
- ${sec('first',L('Primero','First thing'))}${sec('during',L('Durante el día','During the day'))}${sec('end',L('Antes de salir','Before you leave'))}
+ ${sec('first',L('Primero','First thing'))}${sec('time',L('A una hora exacta','At a set time'))}${sec('during',L('Durante el día','During the day'))}${sec('end',L('Antes de salir','Before you leave'))}
  ${!ts.length?`<p class="muted">${L('Hoy solo trabajo de tu área.','Just your area\'s work today.')}</p>`:''}
  <p class="fine">${L('Este plan puede cambiar en la mañana. Maria o Isabel te avisarán.','This plan may change in the morning. Maria or Isabel will let you know.')}</p></div>`;
 }
-function taskBtn(t){return `<button class="task ${t.done?'done':''}" data-act="toggleTask" data-id="${t.id}"><span class="box"></span><span class="tt">${esc(title(t))}${t.src==='req'?`<small>${L('Solicitud de','Request from')} ${esc(t.from)}${t.note?' · '+esc(t.note):''}</small>`:''}</span><span class="tm">${t.min} min</span></button>`}
+function taskBtn(t){return `<button class="task ${t.done?'done':''}" data-act="toggleTask" data-id="${t.id}"><span class="box"></span><span class="tt">${esc(title(t))}${t.src==='req'?`<small>${L('Solicitud de','Request from')} ${esc(t.from)}${t.note?' · '+esc(t.note):''}</small>`:''}</span><span class="tm">${t.when==='time'?fT(t.tm||480)+' · ':''}${t.min} min</span></button>`}
 function offForm(pid){
  const mine=S.off.filter(o=>o.pid===pid).sort((a,b)=>b.start.localeCompare(a.start));
  return `<div class="card"><form class="form" data-form="off" data-p="${pid}">
   <b style="font-size:17px">${L('Pedir tiempo libre','Request time off')}</b>
-  <label>${L('Tipo','Type')}<select id="of-type" name="type"><option value="days">${L('Días libres','Days off')}</option><option value="appt">${L('Cita (medio día)','Appointment (half day)')}</option><option value="pto">PTO / Sick</option></select></label>
+  <label>${L('Tipo','Type')}<select id="of-type" name="type"><option value="days">${L('Días libres','Days off')}</option><option value="early">${L('Salir temprano','Leave early')}</option><option value="late">${L('Entrar tarde','Come in late')}</option><option value="pto">PTO / Sick</option></select></label>
+  <label id="of-tw" style="display:none">${L('Hora','Time')}<select id="of-t" name="tm">${Array.from({length:68},(_,i)=>240+i*15).map(v=>`<option value="${v}" ${v===840?'selected':''}>${fT(v)}</option>`).join('')}</select></label>
   <div class="two"><label>${L('Desde','From')}<input id="of-s" type="date" name="s" value="${addDays(TODAY,14)}" min="${TODAY}" required></label><label>${L('Hasta','To')}<input id="of-e" type="date" name="e" min="${TODAY}"></label></div>
   <label>${L('Nota','Note')}<input id="of-n" name="note" placeholder="${L('Opcional','Optional')}"></label>
   <p class="fine">${L('Recuerda: de enero a mayo no se da tiempo libre, y en diciembre los líderes no pueden faltar al mismo tiempo.','Reminder: no time off January–May, and in December leads can\'t be off at the same time.')}</p>
   <button class="btn primary wide">${L('Enviar a Cesly','Send to Cesly')}</button></form></div>
-  <div class="card"><b>${L('Mis solicitudes','My requests')}</b>${mine.map(o=>`<div class="reqitem"><span>${typeL(o.type)}<br><span class="muted">${rangeTxt(o)}</span></span><span class="pill s-${o.status}">${offL(o.status)}</span></div>`).join('')||`<p class="muted">${L('Aún no tienes solicitudes.','No requests yet.')}</p>`}</div>`;
+  <div class="card"><b>${L('Mis solicitudes','My requests')}</b>${mine.map(o=>`<div class="reqitem"><span>${typeO(o)}<br><span class="muted">${rangeTxt(o)}</span></span><span class="pill s-${o.status}">${offL(o.status)}</span></div>`).join('')||`<p class="muted">${L('Aún no tienes solicitudes.','No requests yet.')}</p>`}</div>`;
 }
 function tabbar(items,cur,act){return `<nav class="tabbar" style="grid-template-columns:repeat(${items.length},1fr)">${items.map(i=>`<button class="${cur===i[0]?'on':''}" data-act="${act}" data-v="${i[0]}">${ICON[i[2]]}${i[1]}</button>`).join('')}</nav>`}
 
@@ -884,7 +971,7 @@ function rKiosk(){
  const d=S.kDay==='tomorrow'&&isPub(NEXT)?NEXT:TODAY;
  let h=`<div class="kiosk"><div class="kscreen"><div class="khead"><div><h3>${dLong(d)}</h3><span>Plan del Día · Cascade Tropicals</span></div><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div class="seg" style="background:transparent;border-color:var(--leaf-ink)"><button class="${d===TODAY?'on':''}" data-act="kDay" data-v="today" style="color:inherit">${L('Hoy','Today')}</button><button class="${d===NEXT?'on':''}" data-act="kDay" data-v="tomorrow" ${isPub(NEXT)?'':'disabled'} style="color:inherit">${L('Mañana','Tomorrow')}${isPub(NEXT)?'':' 🔒'}</button></div><span class="clock" id="clock">${d===TODAY?fT(nowMin()):''}</span></div></div>
  <div class="kbody"><div><p class="kprompt">${L('Toca tu nombre para ver tu plan','Tap your name to see your plan')}</p><div class="ktiles">${P.map(p=>{const a=areaOf(p.id,d);return `<button class="ktile a-${a}" data-act="kp" data-p="${p.id}"><b>${p.name}</b>${chip(a)}</button>`}).join('')}</div></div>
- <div class="kside">${['OF','REC','COUNT'].filter(a=>areaUnits(d,a)!=null&&crew(d,a).length).map(a=>{const e=estEnd(d,a);return `<div class="acard b-${a}"><div class="acard-h">${chip(a)}<span>${crew(d,a).length} ${L('personas','people')}</span></div><div class="big">${n0(areaUnits(d,a))} <small>${L('unidades','units')}</small></div><div class="kv"><span>${L('Terminar','Finish')}</span><b class="lv-${level(d,a)}">${e?fT(e):'—'}</b></div></div>`}).join('')}
+ <div class="kside">${['OF','REC','COUNT'].filter(a=>areaUnits(d,a)!=null&&crewH(d,a).length).map(a=>{const e=estEnd(d,a);return `<div class="acard b-${a}"><div class="acard-h">${chip(a)}<span>${crewH(d,a).length} ${L('personas','people')}</span></div><div class="big">${n0(areaUnits(d,a))} <small>${L('unidades','units')}</small></div><div class="kv"><span>${L('Terminar','Finish')}</span><b class="lv-${level(d,a)}">${e?fT(e):'—'}</b></div></div>`}).join('')}
  ${META[d]&&META[d].note?`<div class="card"><b>${L(META[d].note[0],META[d].note[1])}</b></div>`:''}
  <div class="card" style="font-size:14px">${isPub(NEXT)?`<b class="lv-good">${L('El plan de mañana ya está publicado','Tomorrow\'s plan is published')}</b>`:`<b>${L('Mañana','Tomorrow')}:</b> ${L('aún no publicado','not published yet')}`}</div></div></div>`;
  if(S.kioskPerson)h+=`<div class="koverlay"><div class="row-between" style="max-width:620px;width:100%;margin:0 auto"><h3 style="font-size:34px">${PM[S.kioskPerson].name}</h3><button class="btn primary" data-act="kclose">${L('Listo','Done')}</button></div>${planCard(S.kioskPerson,d)}<p class="fine" style="text-align:center">${L('Regresa sola a la pantalla de nombres en 30 segundos.','Returns to the name screen after 30 seconds.')}</p></div>`;
@@ -897,18 +984,49 @@ function rMenu(){
  const {p,d,x,y}=S.menu,a=areaOf(p,d);
  let inner=`<div class="mh">${PM[p].name} · ${dShort(d)}</div>`;
  if(a==='VAC')inner+=`<div class="mh">${L('De vacaciones (aprobado). Cámbialo en Tiempo libre.','On vacation (approved). Change it under Time off.')}</div>`;
- else inner+=['OF','QC','REC','WATER','GEN','TASKS','REST','NONE'].map(k=>`<button class="chip a-${k}" data-act="setArea" data-a="${k}">${k===a?'✓ ':''}${aL(k)}</button>`).join('');
+ else inner+=['OF','QC','REC','WATER','COUNT','TASKS','REST','NONE'].map(k=>`<button class="chip a-${k}" data-act="setArea" data-a="${k}">${k===a?'✓ ':''}${aL(k)}</button>`).join('');
  const left=Math.max(8,Math.min(x,innerWidth-222)),top=y+300>innerHeight?Math.max(8,y-310):y;
  m.innerHTML=`<div class="menu" style="left:${left}px;top:${top}px">${inner}</div>`;
 }
 let toastT;
-function toast(msg){S.toast=msg;clearTimeout(toastT);toastT=setTimeout(()=>{S.toast=null;render()},2800)}
+function toast(msg,ms){S.toast=msg;clearTimeout(toastT);toastT=setTimeout(()=>{S.toast=null;render()},ms||2800)}
 let kT;
+/* ---------- AUTO PLAN ---------- */
+const AUTO_AREAS=['OF','REC','QC','WATER','COUNT'];
+const AUTO_DEF={OF:{min:1,pri:1},REC:{min:1,pri:2},QC:{min:0,pri:3},WATER:{min:0,pri:4},COUNT:{min:0,pri:5}};
+function autoArea(a){const r=(S.auto||[]).find(x=>x.kind==='area'&&x.key===a)||{};const n=v=>v===''||v===undefined||isNaN(+v)?null:+v;return {min:n(r.a)===null?AUTO_DEF[a].min:n(r.a),max:n(r.b),pri:n(r.c)===null?AUTO_DEF[a].pri:n(r.c)}}
+function autoPerson(pid){const r=(S.auto||[]).find(x=>x.kind==='person'&&x.key===pid)||{};const l=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);return {can:l(r.a),fixed:r.b||'',days:l(r.c).map(Number)}}
+function autoSetLocal(kind,key,a,b,c){S.auto=S.auto||[];let r=S.auto.find(x=>x.kind===kind&&x.key===key);if(!r){r={kind,key,a:'',b:'',c:''};S.auto.push(r)}r.a=String(a);r.b=String(b);r.c=String(c);op('autoSet',{kind,key,a:r.a,b:r.b,c:r.c})}
+function autoEditor(){
+ const DN=[1,2,3,4,5,6],dl=w=>fD(addDays('2026-10-11',w),{weekday:'short'}).replace('.','');
+ let h=`<p class="muted" style="margin:0">${L('Estas reglas las usa el botón Generar plan. Solo llena el borrador; tú lo revisas y lo publicas. Las horas necesarias vienen del pronóstico (ERP); cada persona rinde unas 7.5 h menos sus tareas.','These rules drive the Generate plan button. It only fills the draft; you review and publish. Hours needed come from the forecast (ERP); each person gives about 7.5 h minus their tasks.')}</p>`;
+ h+=`<table class="sh"><thead><tr class="shh"><th colspan="4">${L('Reglas por área','Area rules')}</th></tr><tr class="shc"><th>${L('Área','Area')}</th><th>${L('Mín. personas','Min people')}</th><th>${L('Máx. personas','Max people')}</th><th>${L('Prioridad (1 = primero)','Priority (1 = first)')}</th></tr></thead><tbody>${AUTO_AREAS.map(a=>{const r=autoArea(a);return `<tr><td>${chip(a)}</td><td><input class="aaf" data-a="${a}" data-f="min" type="number" min="0" max="20" value="${r.min}"></td><td><input class="aaf" data-a="${a}" data-f="max" type="number" min="0" max="20" value="${r.max===null?'':r.max}" placeholder="—"></td><td><input class="aaf" data-a="${a}" data-f="pri" type="number" min="1" max="9" value="${r.pri}"></td></tr>`}).join('')}</tbody></table>`;
+ h+=`<div class="scroll-x"><table class="sh" style="min-width:760px;margin-top:12px"><thead><tr class="shh"><th colspan="5">${L('Por persona','Per person')}</th></tr><tr class="shc"><th>${L('Persona','Person')}</th><th>${L('Área base','Home area')}</th><th>${L('También puede cubrir','Can also cover')}</th><th>${L('Área fija','Fixed area')}</th><th>${L('Días de área fija (vacío = todos)','Fixed days (empty = every day)')}</th></tr></thead><tbody>${P.filter(p=>p.role!=='manager'&&p.role!=='kiosk').map(p=>{const r=autoPerson(p.id);return `<tr><td><b>${p.name}</b></td><td>${chip(p.home||'NONE')}</td><td>${AUTO_AREAS.filter(a=>a!==p.home).map(a=>`<label class="dchk"><input type="checkbox" class="apc" data-p="${p.id}" data-a="${a}" ${r.can.includes(a)?'checked':''}> ${aS(a)}</label>`).join(' ')}</td><td><select class="apf" data-p="${p.id}"><option value="">—</option>${AUTO_AREAS.concat(['TASKS']).map(a=>`<option value="${a}" ${r.fixed===a?'selected':''}>${aL(a)}</option>`).join('')}</select></td><td><div class="days">${DN.map(w=>`<button class="dchip ${r.days.includes(w)?'on':''}" data-act="apDay" data-p="${p.id}" data-w="${w}" aria-pressed="${r.days.includes(w)}">${dl(w)}</button>`).join('')}</div></td></tr>`}).join('')}</tbody></table></div>`;
+ return h;
+}
+function autoPersonSave(pid,mut){const r=autoPerson(pid);mut(r);autoSetLocal('person',pid,r.can.join(','),r.fixed,r.days.join(','))}
+function genPlan(d,quiet){
+ const meta=META[d]||{},w=dow(d),wk=tonly(d);
+ const rules={};AUTO_AREAS.forEach(a=>rules[a]=autoArea(a));
+ const hrs={OF:meta.out?meta.out[1]:0,REC:meta.in?meta.in[1]:0,COUNT:meta.count?meta.count/3600:0,QC:0,WATER:0};
+ let avail=P.filter(p=>p.role!=='manager'&&p.role!=='kiosk'&&!['REST','VAC'].includes(areaOf(p.id,d)));
+ if(wk)avail=avail.filter(p=>w===6?p.satWork:p.sunWork);
+ const areaList=wk?['COUNT']:AUTO_AREAS,as={},left=new Set(avail.map(p=>p.id)),cnt={};areaList.forEach(a=>cnt[a]=0);
+ for(const p of avail){const ap=autoPerson(p.id);if(ap.fixed&&(!ap.days.length||ap.days.includes(w))&&(areaList.includes(ap.fixed)||(!wk&&ap.fixed==='TASKS'))){as[p.id]=ap.fixed;left.delete(p.id);if(cnt[ap.fixed]!==undefined)cnt[ap.fixed]++}}
+ const need=a=>{const r=rules[a];let n=Math.max(Math.ceil(hrs[a]/(SHIFT/60)),r.min);if(r.max!==null)n=Math.min(n,r.max);return n};
+ const elig=(p,a)=>p.home===a||autoPerson(p.id).can.includes(a);
+ for(const a of [...areaList].sort((x,y)=>rules[x].pri-rules[y].pri)){const want=need(a);while(cnt[a]<want){const c=[...left].map(id=>PM[id]).filter(p=>elig(p,a)).sort((x,y)=>(y.home===a)-(x.home===a));if(!c.length)break;as[c[0].id]=a;left.delete(c[0].id);cnt[a]++}}
+ if(!wk)for(const id of left){const p=PM[id],a=p.home;if(AUTO_AREAS.includes(a)&&(rules[a].max===null||cnt[a]<rules[a].max)){as[id]=a;cnt[a]++}else as[id]='TASKS'}
+ let n=0;for(const id in as){if(areaOf(id,d)!==as[id]){setArea(d,id,as[id]);n++}}
+ if(!quiet){toast((wk?'':L('Plan generado: ','Plan generated: '))+AUTO_AREAS.filter(a=>cnt[a]).map(a=>aS(a)+' '+cnt[a]).join(' · ')+' · '+n+' '+L('cambios. Revísalo antes de publicar.','changes. Review before publishing.'),6000);render()}
+ return n;
+}
+function genWeek(days){let n=0,dd=0;for(const d of days){if(d<TODAY||S.published[d])continue;n+=genPlan(d,true);dd++}toast(L(`Semana generada: ${dd} días, ${n} cambios. Revísala antes de publicar.`,`Week generated: ${dd} days, ${n} changes. Review before publishing.`),6000);render()}
 function suggest(d){
- const meta=META[d];if(!meta)return;
+ const meta=META[d];if(!meta){toast(L('No hay pronóstico de horas para este día todavía.','No hours forecast for this day yet.'),4000);render();return}
  const outH=meta.out?meta.out[1]:0,inH=meta.in?meta.in[1]:0;
  const pool=P.filter(p=>p.role!=='lead'&&['OF','REC'].includes(areaOf(p.id,d)));
- const tot=outH+inH;if(!tot||!pool.length)return;
+ const tot=outH+inH;if(!tot){toast(L('Este día no tiene horas de trabajo pronosticadas.','This day has no forecast work hours.'),4000);render();return}if(!pool.length){toast(L('Nadie está en OF o Recibo ese día. Ponlos en un área primero (Sugerir solo reparte entre OF y Recibo).','Nobody is in OF or Receiving that day. Put people in an area first (Suggest only splits OF vs Receiving).'),5000);render();return}
  const recLead=P.filter(p=>p.role==='lead'&&p.dept==='REC'&&areaOf(p.id,d)==='REC').length;
  let nRec=Math.round((pool.length+recLead)*inH/tot)-recLead;nRec=Math.max(inH>0?1:0,Math.min(pool.length-(outH>0?1:0),nRec));
  const sorted=[...pool].sort((a,b)=>(a.home==='REC'?0:1)-(b.home==='REC'?0:1));
@@ -921,13 +1039,13 @@ S=newUI();
 try{const l=localStorage.getItem('pdd_lang');if(l==='es'||l==='en')S.lang=l;else if(!/^es/i.test(navigator.language||''))S.lang='en'}catch(e){}
 function applyState(st){
  TODAY=st.today;NEXT=st.next;NOW0=st.nowMin;NOWAT=Date.now();WEEKS=st.weeks;
- WEEKDAYS=WEEKS.map(w=>[0,1,2,3,4,5].map(i=>addDays(w.start,i)));ALLDAYS=WEEKDAYS.flat();
- P=st.people.map(p=>Object.assign({},p));
+ WEEKDAYS=WEEKS.map(w=>[0,1,2,3,4,5,6].map(i=>addDays(w.start,i)));ALLDAYS=WEEKDAYS.flat();
+ P=st.people.map(p=>{const q=Object.assign({},p);if(q.home==='GEN')q.home='TASKS';return q});
  const base=Object.fromEntries(P.map(p=>[p.id,p]));
- PM=new Proxy(base,{get:(t,k)=>t[k]||(typeof k==='string'?{id:k,name:k,dept:'',role:'member',job:'',home:'NONE',rest:[],satWork:false}:undefined)});
+ PM=new Proxy(base,{get:(t,k)=>t[k]||(typeof k==='string'?{id:k,name:k,dept:'',role:'member',job:'',home:'NONE',rest:[],satWork:false,sunWork:false}:undefined)});
  META=st.meta||{};JOBS=st.jobs||{};MGR=st.mgr||'Cesly';
- S.assign={};for(const d in st.schedule)S.assign[d]=Object.assign({},st.schedule[d]);
- S.tasks=st.tasks;S.off=st.off;S.reqs=st.reqs;S.recurring=st.recurring;
+ S.assign={};for(const d in st.schedule){S.assign[d]=Object.assign({},st.schedule[d]);for(const k in S.assign[d])if(S.assign[d][k]==='GEN')S.assign[d][k]='TASKS'}
+ S.auto=st.auto||S.auto||[];S.tasks=st.tasks.map(t=>Object.assign({tm:0},t));S.off=st.off;S.reqs=st.reqs;S.recurring=st.recurring;S.truck=st.truck||{roles:[],crew:{}};
  S.published={};S.start={};for(const d in st.plan){S.published[d]=st.plan[d].published;S.start[d]=st.plan[d].start;if(st.plan[d].note){META[d]=META[d]||{};META[d].note=[st.plan[d].note,st.plan[d].note]}}
  S.me=st.me;S.role=st.me.role;S.pid=st.me.id;S.version=st.version;
  if(!S.dayDate||!ALLDAYS.includes(S.dayDate))S.dayDate=ALLDAYS.includes(NEXT)?NEXT:ALLDAYS[0];
@@ -1074,6 +1192,9 @@ const ACT={
  cell:(ds,el)=>{const r=el.getBoundingClientRect();S.menu={p:ds.p,d:ds.d,x:r.left,y:r.bottom+4}},
  setArea:ds=>{const {p,d}=S.menu;setArea(d,p,ds.a);S.menu=null},
  suggest:()=>suggest(S.dayDate),
+ genPlan:()=>genPlan(S.dayDate),
+ genWeek:()=>genWeek(WEEKDAYS[S.week]),
+ apDay:ds=>{const w=+ds.w;autoPersonSave(ds.p,r=>{r.days=r.days.includes(w)?r.days.filter(x=>x!==w):r.days.concat([w]).sort()});render()},
  publish:()=>{const d=S.dayDate;S.published[d]=true;op('publish',{date:d});toast(L('Publicado · el equipo ya ve su plan en la app','Published · the team can now see their plan in the app'))},
  copyMsg:ds=>{const m=msgFor(PM[ds.p],S.dayDate);if(m)copyText(m).then(()=>{toast(L('Mensaje copiado','Message copied'));render()}).catch(()=>{})},
  rmTask:ds=>{const t=S.tasks.find(x=>x.id===ds.id);if(t&&t.reqId){const r=S.reqs.find(x=>x.id===t.reqId);if(r)r.status='new'}S.tasks=S.tasks.filter(x=>x.id!==ds.id);op('taskRemove',{id:ds.id})},
@@ -1098,9 +1219,17 @@ const ACT={
  wview:ds=>{S.weekView=ds.v},
  wkTasks:()=>{S.wkTasksOpen=!S.wkTasksOpen},
  teamTab:ds=>{S.teamTab=ds.v},
+ tUp:ds=>{tMove(ds.id,-1)},
+ tDown:ds=>{tMove(ds.id,1)},
+ rUp:ds=>{rMove(ds.id,-1)},
+ rDown:ds=>{rMove(ds.id,1)},
+ trOff:ds=>{trSet(ds.d,ds.o,ds.r,ds.p,false)},
+ trToggle:ds=>{const r=S.truck.roles.find(x=>x.id===ds.id);if(!r)return;r.active=!r.active;op('truckRoleUpdate',{id:r.id,active:r.active})},
+ trUp:ds=>{trMove(ds.id,-1)},
+ trDown:ds=>{trMove(ds.id,1)},
  rday:ds=>{const r=S.recurring.find(x=>x.id===ds.id),w=+ds.w;r.days=r.days.includes(w)?r.days.filter(x=>x!==w):[...r.days,w].sort();regen(r);op('recUpdate',{id:r.id,days:r.days})},
  rdel:ds=>{S.recurring=S.recurring.filter(x=>x.id!==ds.id);S.tasks=S.tasks.filter(t=>!(t.recId===ds.id&&t.date>TODAY));op('recDelete',{id:ds.id});toast(L('Tarea recurrente eliminada desde mañana','Recurring task removed from tomorrow on'))},
- unrest:ds=>{const p=PM[ds.p];setArea(S.dayDate,p.id,dow(S.dayDate)===6?'NONE':p.home)}
+ unrest:ds=>{const p=PM[ds.p];setArea(S.dayDate,p.id,tonly(S.dayDate)?(dow(S.dayDate)===0?(p.sunWork?'TASKS':'REST'):'NONE'):p.home)}
 };
 document.addEventListener('click',e=>{
  const el=e.target.closest('[data-act]');
@@ -1113,37 +1242,53 @@ document.addEventListener('click',e=>{
 document.addEventListener('change',e=>{
  const id=e.target.id,cl=e.target.classList;
  if(id==='startSel'){S.start[S.dayDate]=+e.target.value;op('setStart',{date:S.dayDate,min:+e.target.value});render()}
+ else if(id==='of-type'){const w=document.getElementById('of-tw');if(w)w.style.display=PARTIAL.includes(e.target.value)?'':'none';const ee=document.getElementById('of-e');if(ee)ee.disabled=PARTIAL.includes(e.target.value)}
+ else if(id==='qa-d'){S.quick={p:document.getElementById('qa-p').value,d:e.target.value,t:document.getElementById('qa-t').value};render();document.getElementById('qa-t').focus()}
  else if(id==='dayNote'){const v=e.target.value.trim(),d=S.dayDate;META[d]=META[d]||{};META[d].note=v?[v,v]:null;op('setNote',{date:d,note:v});render()}
  else if(id==='addRest'){if(e.target.value){setArea(S.dayDate,e.target.value,'REST');render()}}
  else if(id==='pullReq'){if(e.target.value){const r=S.reqs.find(x=>x.id===e.target.value);const t=addTask('',S.dayDate,r.est,'during',r.es,r.en,'req','',r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid:'',date:S.dayDate});op('reqAssign',{id:r.id,pid:'',date:S.dayDate,min:r.est,when:'during',taskId:t.id});toast(L('Solicitud agregada · elige la persona','Request added · pick a person'));render()}}
  else if(cl.contains('slot')){const d=e.target.dataset.d||S.dayDate,a=e.target.dataset.a,cur=e.target.dataset.cur,v=e.target.value;if(cur&&cur!==v)setArea(d,cur,'NONE');if(v)setArea(d,v,a);render()}
- else if(cl.contains('tperson')){const t=S.tasks.find(x=>x.id===e.target.dataset.id);t.pid=e.target.value;if(t.pid&&dow(t.date)===6&&['REST','NONE'].includes(areaOf(t.pid,t.date))){(S.assign[t.date]=S.assign[t.date]||{})[t.pid]='TASKS'}if(t.reqId){const r=S.reqs.find(x=>x.id===t.reqId);if(r)r.pid=t.pid}op('taskUpdate',{id:t.id,pid:t.pid});render()}
- else if(cl.contains('tw')){const t=S.tasks.find(x=>x.id===e.target.dataset.id);t.when=e.target.value;op('taskUpdate',{id:t.id,when:t.when});render()}
+ else if(cl.contains('tperson')&&e.target.value==='ALL'){const t=S.tasks.find(x=>x.id===e.target.dataset.id),ws=workingOn(t.date);if(!ws.length){toast(L('Nadie trabaja ese día.','No one is working that day.'),4000);render();return}
+  t.pid=ws[0].id;op('taskUpdate',{id:t.id,pid:t.pid});ws.slice(1).forEach(q=>{const x=addTask(q.id,t.date,t.min,t.when,t.es,t.en,t.src,t.note,t.from);op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:x.es,en:x.en,src:x.src})});toast(L(`Tarea asignada a ${ws.length} personas`,`Task assigned to ${ws.length} people`));render()}
+ else if(cl.contains('tperson')){const t=S.tasks.find(x=>x.id===e.target.dataset.id);if(!offGuard(e.target.value,t.date))return;t.pid=e.target.value;if(t.pid&&dow(t.date)===6&&['REST','NONE'].includes(areaOf(t.pid,t.date))){(S.assign[t.date]=S.assign[t.date]||{})[t.pid]='TASKS'}if(t.reqId){const r=S.reqs.find(x=>x.id===t.reqId);if(r)r.pid=t.pid}op('taskUpdate',{id:t.id,pid:t.pid});render()}
+ else if(cl.contains('trAdd')){const v=e.target.value;if(v){trSet(e.target.dataset.d,e.target.dataset.o,e.target.dataset.r,v,true)}render()}
+ else if(cl.contains('trname')){const r=S.truck.roles.find(x=>x.id===e.target.dataset.id),v=e.target.value.trim();if(r&&v){r.name=v;op('truckRoleUpdate',{id:r.id,name:v})}render()}
+ else if(cl.contains('tw')){const t=S.tasks.find(x=>x.id===e.target.dataset.id);t.when=e.target.value;if(t.when==='time'&&!t.tm)t.tm=480;op('taskUpdate',{id:t.id,when:t.when,tm:t.tm||0});render()}
+ else if(cl.contains('ttm')){const t=S.tasks.find(x=>x.id===e.target.dataset.id);t.tm=+e.target.value;op('taskUpdate',{id:t.id,tm:t.tm});render()}
+ else if(cl.contains('aaf')){const a=e.target.dataset.a,f=e.target.dataset.f,r=autoArea(a);const v=e.target.value===''?null:Math.max(0,+e.target.value);if(f==='min')r.min=v===null?0:v;else if(f==='max')r.max=v;else r.pri=v===null?r.pri:v;autoSetLocal('area',a,r.min,r.max===null?'':r.max,r.pri);render()}
+ else if(cl.contains('apc')){const p=e.target.dataset.p,a=e.target.dataset.a,on=e.target.checked;autoPersonSave(p,r=>{r.can=on?r.can.concat([a]):r.can.filter(x=>x!==a)});render()}
+ else if(cl.contains('apf')){const v=e.target.value;autoPersonSave(e.target.dataset.p,r=>{r.fixed=v});render()}
+ else if(id==='wk-sel'){S.week=+e.target.value;render()}
+ else if(id==='nt-w'||id==='rr-w'){const w=e.target.parentElement.querySelector('.tmpick');if(w)w.style.display=e.target.value==='time'?'':'none'}
  else if(cl.contains('tmin')){const t=S.tasks.find(x=>x.id===e.target.dataset.id);t.min=+e.target.value||t.min;op('taskUpdate',{id:t.id,min:t.min});render()}
- else if(['rtitle','rperson','rmin','rwhen'].some(c=>cl.contains(c))){const r=S.recurring.find(x=>x.id===e.target.dataset.id),v=e.target.value;let a={id:r.id};
+ else if(['rtitle','rperson','rmin','rwhen','rtm'].some(c=>cl.contains(c))){const r=S.recurring.find(x=>x.id===e.target.dataset.id),v=e.target.value;let a={id:r.id};
   if(cl.contains('rtitle')){if(!v.trim())return;r.es=r.en=v.trim();a.es=r.es;a.en=r.en}
   else if(cl.contains('rperson')){r.pid=v;a.pid=v}
   else if(cl.contains('rmin')){r.min=+v||r.min;a.min=r.min}
-  else{r.when=v;a.when=v}
+  else if(cl.contains('rtm')){r.tm=+v;a.tm=r.tm}
+  else{r.when=v;a.when=v;if(v==='time'&&!r.tm)r.tm=480;a.tm=r.tm||0}
   regen(r);op('recUpdate',a);toast(L('Actualizado desde mañana','Updated from tomorrow on'));render()}
  else if(id==='al-p'||id==='al-d'){const f=e.target.form,r=S.reqs.find(x=>x.id===f.dataset.id);document.getElementById('al-help').innerHTML=allocHelp(f.p.value,f.d.value,r)}
 });
 document.addEventListener('submit',e=>{
  e.preventDefault();const f=e.target,k=f.dataset.form;
  if(k==='pin'){doLogin(S.login.sel,f.pin.value);return}
- if(k==='alloc'){const r=S.reqs.find(x=>x.id===f.dataset.id);const pid=f.p.value,d=f.d.value,m=+f.m.value||r.est,note=f.n.value.trim();const t=addTask(pid,d,m,f.w.value,r.es,r.en,'req',note,r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid,date:d});S.openTask=null;op('reqAssign',{id:r.id,pid,date:d,min:m,when:f.w.value,note,taskId:t.id});toast(L(`Asignada a ${PM[pid].name} · ${dShort(d)} · ${m} min`,`Assigned to ${PM[pid].name} · ${dShort(d)} · ${m} min`))}
+ if(k==='wreq'){const r=S.reqs.find(x=>x.id===f.dataset.id);const pid=f.p.value,d=f.d.value;if(!pid){toast(L('Elige una persona','Pick a person'),3000);return}if(!offGuard(pid,d))return;const t=addTask(pid,d,r.est,'during',r.es,r.en,'req','',r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid,date:d});op('reqAssign',{id:r.id,pid,date:d,min:r.est,when:'during',note:'',taskId:t.id});toast(L(`Asignada a ${PM[pid].name} · ${dShort(d)}`,`Assigned to ${PM[pid].name} · ${dShort(d)}`))}
+ else if(k==='alloc'){const r=S.reqs.find(x=>x.id===f.dataset.id);const pid=f.p.value,d=f.d.value,m=+f.m.value||r.est,note=f.n.value.trim();if(!offGuard(pid,d))return;const t=addTask(pid,d,m,f.w.value,r.es,r.en,'req',note,r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid,date:d});S.openTask=null;op('reqAssign',{id:r.id,pid,date:d,min:m,when:f.w.value,note,taskId:t.id});toast(L(`Asignada a ${PM[pid].name} · ${dShort(d)} · ${m} min`,`Assigned to ${PM[pid].name} · ${dShort(d)} · ${m} min`))}
  else if(k==='newreq'){const desc=f.desc.value.trim();if(!desc)return;const q={id:rid('r'),from:f.from.value.trim()||'—',team:f.team.value,pri:+f.pri.value,due:f.due.value||addDays(TODAY,3),est:+f.est.value||30,loc:f.loc.value.trim(),es:desc,en:desc,status:'new'};S.reqs.push(q);op('reqAdd',q);S.newReq=false;S.taskFilter='new';toast(L('Solicitud recibida · está en Nuevas','Request received · it\'s under New'))}
- else if(k==='addtask'){const t=f.t.value.trim();if(!t)return;const x=addTask(f.p.value,S.dayDate,+f.m.value||30,f.w.value,t,t,'rutina');op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:t,en:t,src:'rutina'});toast(L('Tarea agregada','Task added'))}
+ else if(k==='quick'){const t=f.t.value.trim();if(!t)return;const pid=f.p.value,d=f.d.value;S.quick={p:pid,d,t};if(!offGuard(pid,d))return;S.quick.t='';if(pid==='ALL'){const r=addForAll(d,30,'during',t,t,'rutina');if(!r)return;toast(L('Tarea agregada','Task added')+' · '+r.length+' '+L('personas','people')+' · '+dShort(d))}else{const x=addTask(pid,d,30,'during',t,t,'rutina');op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:t,en:t,src:'rutina'});toast(L('Tarea agregada','Task added')+(pid?' · '+PM[pid].name:'')+' · '+dShort(d))}setTimeout(()=>{const i=document.getElementById('qa-t');if(i)i.focus()},0)}
+ else if(k==='addtask'){const t=f.t.value.trim();if(!t)return;if(!offGuard(f.p.value,S.dayDate))return;if(f.p.value==='ALL'){const r=addForAll(S.dayDate,+f.m.value||30,f.w.value,t,t,'rutina','','',f.w.value==='time'?+f.tm.value:0);if(!r)return;toast(L('Tarea agregada','Task added')+' · '+r.length+' '+L('personas','people'))}else{const x=addTask(f.p.value,S.dayDate,+f.m.value||30,f.w.value,t,t,'rutina');x.tm=f.w.value==='time'?+f.tm.value:0;op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:t,en:t,src:'rutina',tm:x.tm});toast(L('Tarea agregada','Task added'))}}
  else if(k==='team'){const E=f.elements,id=f.dataset.p,jid=f.dataset.job,nm=E.pname.value.trim();if(!nm)return;
   const rest=[1,2,3,4,5,6].filter(w=>E['r'+w].checked);
-  const pa={id,name:nm,dept:E.dept.value,role:E.role.value,job:E.job.value,home:E.home.value,rest,satWork:E.satWork.checked};
-  Object.assign(P.find(x=>x.id===id),{name:nm,dept:pa.dept,role:pa.role,job:pa.job,home:pa.home,rest,satWork:pa.satWork});
+  const pa={id,name:nm,dept:E.dept.value,role:E.role.value,job:E.job.value,home:E.home.value,rest,satWork:E.satWork.checked,sunWork:E.sunWork.checked};
+  Object.assign(P.find(x=>x.id===id),{name:nm,dept:pa.dept,role:pa.role,job:pa.job,home:pa.home,rest,satWork:pa.satWork,sunWork:pa.sunWork});
   op('personUpdate',pa);
   if(jid&&JOBS[jid]&&E.t_es){const rd=v=>v.split('\n').map(x=>x.trim()).filter(Boolean),mk=l=>({t:E['t_'+l].value.trim(),p:E['p_'+l].value.trim(),r:rd(E['r_'+l].value),g:rd(E['g_'+l].value),to:E['to_'+l].value.trim()});
    const ja={id:jid,es:mk('es'),en:mk('en')};JOBS[jid]={es:ja.es,en:ja.en};op('jobUpdate',ja)}
   S.teamEdit=false;toast(L('Guardado. Los días ya creados no cambian.','Saved. Days already created do not change.'))}
- else if(k==='newrec'){const t=f.t.value.trim();if(!t)return;const days=[1,2,3,4,5,6].filter(w=>f['d'+w].checked);if(!days.length)return;const r={id:rid('rr'),es:t,en:t,days,pid:f.p.value,min:+f.m.value||30,when:f.w.value};S.recurring.push(r);genRule(r,addDays(TODAY,1));op('recAdd',r);toast(L('Tarea recurrente agregada','Recurring task added'))}
- else if(k==='off'){const s=f.s.value;if(!s)return;let en=f.e.value||s;if(en<s)en=s;const o={id:rid('o'),pid:f.dataset.p,type:f.type.value,start:s,end:en,note:f.note.value.trim(),status:'pending'};S.off.push(o);op('offAdd',{id:o.id,pid:o.pid,type:o.type,start:s,end:en,note:o.note});toast(L('Enviado a Cesly · te avisamos cuando lo revise','Sent to Cesly · you\'ll hear back once it\'s reviewed'))}
+ else if(k==='newrole'){const n=f.n.value.trim();if(!n)return;const id=rid('tr');S.truck.roles.push({id,name:n,sort:Math.max(0,...S.truck.roles.map(r=>r.sort))+1,active:true});op('truckRoleAdd',{id,name:n});toast(L('Puesto agregado','Position added'))}
+ else if(k==='newrec'){const t=f.t.value.trim();if(!t)return;const days=[1,2,3,4,5,6].filter(w=>f['d'+w].checked);if(!days.length)return;const r={id:rid('rr'),es:t,en:t,days,pid:f.p.value,min:+f.m.value||30,when:f.w.value,tm:f.w.value==='time'?+f.tm.value:0};S.recurring.push(r);genRule(r,addDays(TODAY,1));op('recAdd',r);toast(L('Tarea recurrente agregada','Recurring task added'))}
+ else if(k==='off'){const s=f.s.value;if(!s)return;let en=f.e.value||s;if(en<s)en=s;const o={id:rid('o'),pid:f.dataset.p,type:f.type.value,start:s,end:en,note:f.note.value.trim(),status:'pending'};if(PARTIAL.includes(o.type)){o.tm=+f.tm.value;o.end=s;en=s}S.off.push(o);op('offAdd',{id:o.id,pid:o.pid,type:o.type,start:s,end:en,tm:o.tm||0,note:o.note});toast(L('Enviado a Cesly · te avisamos cuando lo revise','Sent to Cesly · you\'ll hear back once it\'s reviewed'))}
  render();
 });
 window.addEventListener('scroll',()=>{if(S.menu&&Math.abs(scrollY-(S.menu.sy??scrollY))>60){S.menu=null;rMenu()}},{passive:true});

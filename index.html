@@ -65,6 +65,7 @@ section.block{padding-block:28px}
 .seg button.on small{color:var(--leaf-ink);opacity:.8}
 .seg button:disabled{opacity:.45;cursor:not-allowed}
 select.sel{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:6px 8px}
+.trn th.trh{font-size:12px;white-space:normal;min-width:70px;text-align:center}.trc{text-align:center}.trb{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--leaf-ink);font-weight:700;cursor:pointer}.trb.on{background:var(--leaf);border-color:var(--leaf)}.trb:hover{border-color:var(--leaf)}
 .qplus{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:3px 10px;border-radius:999px;border:1px solid var(--leaf);background:transparent;color:var(--leaf);font-size:12px;font-weight:600;cursor:pointer}
 .qplus:hover{background:var(--leaf);color:var(--leaf-ink)}
 .qcard{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px;margin:0 0 10px}
@@ -716,6 +717,17 @@ function trMove(id,dir){const a=S.truck.roles.filter(r=>r.active).sort((x,y)=>x.
 function trLine(pid,d){const l=(((S.truck||{}).crew||{})[d]||[]).filter(x=>x[2]===pid);if(!l.length)return '';
  const rm=Object.fromEntries(((S.truck&&S.truck.roles)||[]).map(r=>[r.id,r.name]));
  return `<div class="goal">${L('Tu puesto en el camión','Your truck position')}: <b>${l.map(x=>esc(rm[x[1]]||'?')+' · '+x[0]).join(', ')}</b></div>`}
+const isTr=(pid,k)=>(S.training||[]).some(x=>x.pid===pid&&x.key===k);
+function trainEditor(){
+ const rs=((S.truck&&S.truck.roles)||[]).filter(r=>r.active).sort((a,b)=>a.sort-b.sort);
+ const cols=[...['OF','REC','QC','WATER','COUNT'].map(a=>({k:a,n:aS(a)})),...rs.map(r=>({k:'tr:'+r.id,n:r.name}))];
+ let h=`<p class="muted" style="margin:0">${L('Toca una casilla para marcar quién está capacitado. Es solo una lista de referencia; el plan automático no la usa.','Tap a box to mark who is trained. This is a reference list only; the auto plan does not use it.')}</p>`;
+ h+=`<div class="scroll-x" data-keep="train"><table class="sh trn"><thead><tr class="shh"><th>${L('Persona','Person')}</th><th colspan="5">${L('Áreas','Areas')}</th><th colspan="${Math.max(rs.length,1)}">${L('Puestos del camión','Truck roles')}</th><th>${L('Total','Total')}</th></tr><tr class="shc"><th></th>${cols.map(c=>`<th class="trh">${esc(c.n)}</th>`).join('')}<th></th></tr></thead><tbody>`;
+ for(const p of P){const n=cols.filter(c=>isTr(p.id,c.k)).length;
+  h+=`<tr><th>${esc(p.name)}</th>${cols.map(c=>{const on=isTr(p.id,c.k);return `<td class="trc"><button class="trb ${on?'on':''}" data-act="trainTog" data-p="${p.id}" data-k="${c.k}" aria-pressed="${on}" aria-label="${esc(p.name)} ${esc(c.n)}">${on?'✓':''}</button></td>`}).join('')}<td class="trc"><b>${n}</b> / ${cols.length}</td></tr>`}
+ h+=`<tr class="tsum"><th>${L('Capacitados','Trained')}</th>${cols.map(c=>`<td class="trc"><b>${P.filter(p=>isTr(p.id,c.k)).length}</b></td>`).join('')}<td></td></tr>`;
+ return h+'</tbody></table></div>';
+}
 function truckEditor(){
  const rs=((S.truck&&S.truck.roles)||[]).slice().sort((a,b)=>a.sort-b.sort),act=rs.filter(r=>r.active);
  let h=`<p class="muted" style="margin:0">${L('Estos puestos se asignan en el Plan del día, en Recibo, cuando llega un camión de FL o CA.','These positions are assigned in the Day plan, under Receiving, when an FL or CA truck arrives.')}</p>`;
@@ -873,9 +885,10 @@ function mOff(){
 }
 function mTeam(){
  const p=PM[S.teamSel];
- const tabs=`<div class="seg" style="align-self:flex-start">${[['people',L('Personas y puestos','People & jobs')],['rec',L('Tareas recurrentes','Recurring tasks')],['truck',L('Puestos del camión','Truck Roles')],['auto',L('Plan automático','Auto plan')]].map(t=>`<button class="${S.teamTab===t[0]?'on':''}" data-act="teamTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>`;
+ const tabs=`<div class="seg" style="align-self:flex-start">${[['people',L('Personas y puestos','People & jobs')],['rec',L('Tareas recurrentes','Recurring tasks')],['truck',L('Puestos del camión','Truck Roles')],['train',L('Capacitación','Training')],['auto',L('Plan automático','Auto plan')]].map(t=>`<button class="${S.teamTab===t[0]?'on':''}" data-act="teamTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>`;
  if(S.teamTab==='rec')return tabs+recEditor();
  if(S.teamTab==='truck')return tabs+truckEditor();
+ if(S.teamTab==='train')return tabs+trainEditor();
  if(S.teamTab==='auto')return tabs+autoEditor();
  return tabs+`<div class="team-grid"><div class="plist">${P.map(q=>`<button class="${q.id===S.teamSel?'on':''}" data-act="teamSel" data-p="${q.id}"><span><b>${q.name}</b><br><span class="muted" style="font-size:12px">${L(jt(q.job,'es'),jt(q.job,'en'))}</span></span>${chip(q.home)}</button>`).join('')}</div>
  <div class="card"><div class="row-between" style="margin-bottom:8px"><span class="muted">${roleLabel(p)} · ${L('Descansa','Day off')}: ${p.rest.map(r=>fD(addDays('2026-10-11',r),{weekday:'short'}).replace('.','')).join(', ')||'—'}${p.satWork?' · '+L('Trabaja sábado','Works Saturday'):''}${p.sunWork?' · '+L('Trabaja domingo','Works Sunday'):''}</span><button class="btn sm" data-act="teamEdit">${S.teamEdit?L('Cancelar','Cancel'):L('Editar','Edit')}</button></div>${S.teamEdit?teamForm(p):jobView(p.job)+recByDay(p)}</div></div>`;
@@ -1081,7 +1094,7 @@ function applyState(st){
  PM=new Proxy(base,{get:(t,k)=>t[k]||(typeof k==='string'?{id:k,name:k,dept:'',role:'member',job:'',home:'NONE',rest:[],satWork:false,sunWork:false}:undefined)});
  META=st.meta||{};JOBS=st.jobs||{};MGR=st.mgr||'Cesly';
  S.assign={};for(const d in st.schedule){S.assign[d]=Object.assign({},st.schedule[d]);for(const k in S.assign[d])if(S.assign[d][k]==='GEN')S.assign[d][k]='TASKS'}
- S.auto=st.auto||S.auto||[];S.tasks=st.tasks.map(t=>Object.assign({tm:0},t));S.off=st.off;S.reqs=st.reqs;S.recurring=st.recurring;S.truck=st.truck||{roles:[],crew:{}};
+ S.auto=st.auto||S.auto||[];S.tasks=st.tasks.map(t=>Object.assign({tm:0},t));S.off=st.off;S.reqs=st.reqs;S.recurring=st.recurring;S.truck=st.truck||{roles:[],crew:{}};S.training=st.training||S.training||[];
  S.published={};S.start={};for(const d in st.plan){S.published[d]=st.plan[d].published;S.start[d]=st.plan[d].start;if(st.plan[d].note){META[d]=META[d]||{};META[d].note=[st.plan[d].note,st.plan[d].note]}}
  S.me=st.me;S.role=st.me.role;S.pid=st.me.id;S.version=st.version;
  if(!S.dayDate||!ALLDAYS.includes(S.dayDate))S.dayDate=ALLDAYS.includes(NEXT)?NEXT:ALLDAYS[0];
@@ -1254,6 +1267,7 @@ const ACT={
  calNav:ds=>{let [y,m]=S.calMonth.split('-').map(Number);m+=+ds.v;if(m<1){m=12;y--}if(m>12){m=1;y++}S.calMonth=`${y}-${pad(m)}`},
  calToday:()=>{S.calMonth=TODAY.slice(0,7)},
  wview:ds=>{S.weekView=ds.v},
+ trainTog:ds=>{const k=ds.k,pid=ds.p,on=!isTr(pid,k);S.training=(S.training||[]).filter(x=>!(x.pid===pid&&x.key===k));if(on)S.training.push({pid,key:k});op('trainSet',{pid,key:k,on})},
  wkTasks:()=>{S.wkTasksOpen=!S.wkTasksOpen},
  qaDay:ds=>{S.quick=Object.assign({},S.quick,{d:ds.d});S.qaFocus=1},
  teamTab:ds=>{S.teamTab=ds.v},

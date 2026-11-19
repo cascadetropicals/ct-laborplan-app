@@ -1232,7 +1232,7 @@ const ACT={
  genPlan:()=>genPlan(S.dayDate),
  genWeek:()=>genWeek(WEEKDAYS[S.week]),
  apDay:ds=>{const w=+ds.w;autoPersonSave(ds.p,r=>{r.days=r.days.includes(w)?r.days.filter(x=>x!==w):r.days.concat([w]).sort()});render()},
- publish:()=>{const d=S.dayDate;S.published[d]=true;op('publish',{date:d});toast(L('Publicado · el equipo ya ve su plan en la app','Published · the team can now see their plan in the app'))},
+ publish:()=>{const d=S.dayDate;const un=unscheduled(d);if(un.length){toast(L('No se puede publicar: falta asignar a ','Can\'t publish: not assigned yet – ')+un.map(p=>p.name).join(', ')+'.',6000);return}S.published[d]=true;op('publish',{date:d});toast(L('Publicado · el equipo ya ve su plan en la app','Published · the team can now see their plan in the app'))},
  copyMsg:ds=>{const m=msgFor(PM[ds.p],S.dayDate);if(m)copyText(m).then(()=>{toast(L('Mensaje copiado','Message copied'));render()}).catch(()=>{})},
  rmTask:ds=>{const t=S.tasks.find(x=>x.id===ds.id);if(t&&t.reqId){const r=S.reqs.find(x=>x.id===t.reqId);if(r)r.status='new'}S.tasks=S.tasks.filter(x=>x.id!==ds.id);op('taskRemove',{id:ds.id})},
  tfilter:ds=>{S.taskFilter=ds.v;S.openTask=null},

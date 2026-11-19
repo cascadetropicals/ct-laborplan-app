@@ -65,7 +65,15 @@ section.block{padding-block:28px}
 .seg button.on small{color:var(--leaf-ink);opacity:.8}
 .seg button:disabled{opacity:.45;cursor:not-allowed}
 select.sel{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:6px 8px}
-.qplus{width:26px;height:26px;border-radius:50%;border:1px dashed var(--muted);background:none;color:var(--ink);font-size:16px;line-height:1;cursor:pointer;margin-top:4px}.qplus:hover{background:var(--accent,#2f6f4f);color:#fff;border-style:solid}
+.qplus{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:3px 10px;border-radius:999px;border:1px solid var(--leaf);background:transparent;color:var(--leaf);font-size:12px;font-weight:600;cursor:pointer}
+.qplus:hover{background:var(--leaf);color:var(--leaf-ink)}
+.qcard{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px;margin:0 0 10px}
+.qcard h4{margin:0 0 8px;font-size:14px}
+.qgrid{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:flex-end}
+.qgrid>label{flex:1 1 140px}.qgrid>label.qt{flex:1 1 100%}.qgrid>label[for-m]{flex:0 1 90px}
+.qgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;color:var(--muted)}
+.qgrid input,.qgrid select{width:100%}
+.qgrid .tmpick select{width:100%}
 .linkbtn{background:none;border:0;color:var(--muted);text-decoration:underline;font-size:13px}
 
 /* app grid */
@@ -552,7 +560,7 @@ function weekTasksGrid(days){
  let h=genBar(days)+quickBar(days)+reqStrip(days)+`<div class="scroll-x" data-keep="wk"><table class="sh wk"><thead><tr class="shc"><th></th>${days.map(d=>{const st=status(d);return `<th><button class="dayhead ${d===TODAY?'today':''}" data-act="goDay" data-d="${d}"><span class="dname">${dShort(d)}</span><span class="pill st-${st}">${stLabel(st)}</span><span class="dstart">${L('Entrada','Start')} ${fT(startOf(d))}</span></button></th>`}).join('')}</tr></thead><tbody>`;
  h+=`<tr><th>${L('Fuera','Out')}</th>${days.map(d=>{const v=P.filter(p=>areaOf(p.id,d)==='VAC'),r=sat(d)?[]:P.filter(p=>areaOf(p.id,d)==='REST'),pe=P.filter(p=>pendingOn(p.id,d)&&areaOf(p.id,d)!=='VAC');return `<td><div class="outcell">${v.map(p=>`<span class="chip a-VAC">${p.name}</span>`).join('')}${r.map(p=>`<span class="chip a-REST">${p.name}</span>`).join('')}${pe.map(p=>`<span class="chip pendc">${p.name} ?</span>`).join('')}${partChips(d)}${sat(d)?`<span class="muted" style="font-size:12px">${L('Sin tarea = descansa','No task = off')}</span>`:(!v.length&&!r.length&&!pe.length&&!partChips(d)?'<span class="muted">—</span>':'')}</div></td>`}).join('')}</tr>`;
  const ts=S.tasks.filter(t=>days.includes(t.date));
- h+=`<tr class="tsum"><th>${L('Tareas','Tasks')}<button class="linkbtn" data-act="wkTasks">${S.wkTasksOpen?L('Ocultar lista','Hide list'):L('Ver todas','Show all')}</button></th>${days.map(d=>{const dt=ts.filter(t=>t.date===d),un=dt.filter(t=>!t.pid),mins=dt.reduce((a,t)=>a+t.min,0);const plus=ro(d)?'':`<button class="qplus" data-act="qaDay" data-d="${d}" title="${L('Agregar tarea','Add task')}" aria-label="${L('Agregar tarea','Add task')} ${dShort(d)}">+</button>`;if(!dt.length)return `<td><span class="muted">—</span> ${plus}</td>`;return `<td><div class="tcount"><b>${dt.length}</b> ${L('tareas','tasks')} · ${Math.round(mins/60*10)/10} h</div>${un.length&&!ro(d)?`<div class="unlist">${un.map(t=>`<div class="unitem"><span>${esc(title(t))}</span><select class="tperson wsel unas" data-id="${t.id}" aria-label="person"><option value="">— ${L('Elegir persona','Pick a person')} —</option>${personOpts(d,'','',true).replace('<option value=""></option>','')}</select></div>`).join('')}</div>`:(un.length?'':`<span class="lv-good" style="font-size:12px">✓ ${L('Todas con persona','All assigned')}</span>`)} ${plus}</td>`}).join('')}</tr>`;
+ h+=`<tr class="tsum"><th>${L('Tareas','Tasks')}<button class="linkbtn" data-act="wkTasks">${S.wkTasksOpen?L('Ocultar lista','Hide list'):L('Ver todas','Show all')}</button></th>${days.map(d=>{const dt=ts.filter(t=>t.date===d),un=dt.filter(t=>!t.pid),mins=dt.reduce((a,t)=>a+t.min,0);const plus=ro(d)?'':`<button class="qplus" data-act="qaDay" data-d="${d}" title="${L('Agregar tarea','Add task')}" aria-label="${L('Agregar tarea','Add task')} ${dShort(d)}">+ ${L('Tarea','Task')}</button>`;if(!dt.length)return `<td><span class="muted">—</span> ${plus}</td>`;return `<td><div class="tcount"><b>${dt.length}</b> ${L('tareas','tasks')} · ${Math.round(mins/60*10)/10} h</div>${un.length&&!ro(d)?`<div class="unlist">${un.map(t=>`<div class="unitem"><span>${esc(title(t))}</span><select class="tperson wsel unas" data-id="${t.id}" aria-label="person"><option value="">— ${L('Elegir persona','Pick a person')} —</option>${personOpts(d,'','',true).replace('<option value=""></option>','')}</select></div>`).join('')}</div>`:(un.length?'':`<span class="lv-good" style="font-size:12px">✓ ${L('Todas con persona','All assigned')}</span>`)} ${plus}</td>`}).join('')}</tr>`;
  if(S.wkTasksOpen){
   const order=[],seen=new Set();
   S.recurring.forEach(r=>{if(!seen.has(r.es)){seen.add(r.es);order.push(r.es)}});
@@ -639,10 +647,11 @@ function reqStrip(days){
 }
 function planDays(days){const lim=addDays(TODAY,28);const all=WEEKDAYS.flat?WEEKDAYS.flat():[].concat(...WEEKDAYS);return all.filter(d=>d>=TODAY&&(d<=lim||days.includes(d)))}
 const dLbl=d=>dShort(d)+' '+fD(d,{month:'short'});
+const qState=d=>{const g=n=>{const e=document.querySelector('form.qcard [name='+n+']');return e?e.value:''};return {p:g('p'),d:d||g('d'),t:g('t'),w:g('w'),m:g('m'),tm:+g('tm')||480}};
 function quickBar(days){
  const ds=planDays(days);if(!ds.length)return '';
- const q=S.quick||{},d0=ds.includes(q.d)?q.d:(ds.includes(NEXT)?NEXT:ds[0]);
- return `<form class="addtask quick" data-form="quick" style="margin:0 0 10px"><input name="t" id="qa-t" value="${esc(q.t||'')}" placeholder="${L('Nueva tarea rápida, ej. Soplar el techo','Quick task, e.g. Blow the roof')}" required><select name="p" id="qa-p" aria-label="person">${personOpts(d0,q.p||'','— '+L('Persona','Person')+' —')}</select><select name="d" id="qa-d" aria-label="day">${ds.map(d=>`<option value="${d}" ${d===d0?'selected':''}>${dLbl(d)}</option>`).join('')}</select><button class="btn primary sm">+ ${L('Agregar','Add')}</button></form>`;
+ const q=S.quick||{},d0=ds.includes(q.d)?q.d:(ds.includes(NEXT)?NEXT:ds[0]),w0=q.w||'during';
+ return `<form class="qcard" data-form="quick"><h4>+ ${L('Nueva tarea','New task')}</h4><div class="qgrid"><label class="qt">${L('Tarea','Task')}<input name="t" id="qa-t" value="${esc(q.t||'')}" placeholder="${L('Ej. Soplar el techo','e.g. Blow the roof')}" required></label><label>${L('Día','Day')}<select name="d" id="qa-d">${ds.map(d=>`<option value="${d}" ${d===d0?'selected':''}>${dLbl(d)}</option>`).join('')}</select></label><label>${L('Persona','Person')}<select name="p" id="qa-p">${personOpts(d0,q.p||'','— '+L('Elegir','Pick')+' —')}</select></label><label>${L('Cuándo','When')}<select name="w" id="qa-w">${WHENS.map(w=>`<option value="${w}" ${w===w0?'selected':''}>${whenL(w)}</option>`).join('')}</select></label><label class="tmpick" style="display:${w0==='time'?'flex':'none'}">${L('Hora','Time')}${timeSel('',q.tm||480,'name="tm"')}</label><label>${L('Minutos','Minutes')}<input name="m" id="qa-m" type="number" min="5" step="5" value="${q.m||30}"></label><button class="btn primary">+ ${L('Agregar','Add')}</button></div></form>`;
 }
 const ro0=d=>d<TODAY;
 const workingOn=d=>P.filter(p=>!['REST','VAC','NONE'].includes(areaOf(p.id,d)));
@@ -1243,7 +1252,7 @@ const ACT={
  calToday:()=>{S.calMonth=TODAY.slice(0,7)},
  wview:ds=>{S.weekView=ds.v},
  wkTasks:()=>{S.wkTasksOpen=!S.wkTasksOpen},
- qaDay:ds=>{const q=S.quick||{};S.quick={p:q.p||'',d:ds.d,t:q.t||''};S.qaFocus=1},
+ qaDay:ds=>{S.quick=Object.assign({},S.quick,{d:ds.d});S.qaFocus=1},
  teamTab:ds=>{S.teamTab=ds.v},
  tUp:ds=>{tMove(ds.id,-1)},
  tDown:ds=>{tMove(ds.id,1)},
@@ -1269,7 +1278,7 @@ document.addEventListener('change',e=>{
  const id=e.target.id,cl=e.target.classList;
  if(id==='startSel'){S.start[S.dayDate]=+e.target.value;op('setStart',{date:S.dayDate,min:+e.target.value});render()}
  else if(id==='of-type'){const w=document.getElementById('of-tw');if(w)w.style.display=PARTIAL.includes(e.target.value)?'':'none';const ee=document.getElementById('of-e');if(ee)ee.disabled=PARTIAL.includes(e.target.value)}
- else if(id==='qa-d'){S.quick={p:document.getElementById('qa-p').value,d:e.target.value,t:document.getElementById('qa-t').value};render();document.getElementById('qa-t').focus()}
+ else if(id==='qa-d'){S.quick=qState(e.target.value);render();document.getElementById('qa-t').focus()}
  else if(id==='dayNote'){const v=e.target.value.trim(),d=S.dayDate;META[d]=META[d]||{};META[d].note=v?[v,v]:null;op('setNote',{date:d,note:v});render()}
  else if(id==='addRest'){if(e.target.value){setArea(S.dayDate,e.target.value,'REST');render()}}
  else if(id==='pullReq'){if(e.target.value){const r=S.reqs.find(x=>x.id===e.target.value);const t=addTask('',S.dayDate,r.est,'during',r.es,r.en,'req','',r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid:'',date:S.dayDate});op('reqAssign',{id:r.id,pid:'',date:S.dayDate,min:r.est,when:'during',taskId:t.id});toast(L('Solicitud agregada · elige la persona','Request added · pick a person'));render()}}
@@ -1285,6 +1294,7 @@ document.addEventListener('change',e=>{
  else if(cl.contains('apc')){const p=e.target.dataset.p,a=e.target.dataset.a,on=e.target.checked;autoPersonSave(p,r=>{r.can=on?r.can.concat([a]):r.can.filter(x=>x!==a)});render()}
  else if(cl.contains('apf')){const v=e.target.value;autoPersonSave(e.target.dataset.p,r=>{r.fixed=v});render()}
  else if(id==='wk-sel'){S.week=+e.target.value;render()}
+ else if(id==='qa-w'){const w=e.target.closest('.qgrid').querySelector('.tmpick');if(w)w.style.display=e.target.value==='time'?'flex':'none'}
  else if(id==='nt-w'||id==='rr-w'){const w=e.target.parentElement.querySelector('.tmpick');if(w)w.style.display=e.target.value==='time'?'':'none'}
  else if(cl.contains('tmin')){const t=S.tasks.find(x=>x.id===e.target.dataset.id);t.min=+e.target.value||t.min;op('taskUpdate',{id:t.id,min:t.min});render()}
  else if(['rtitle','rperson','rmin','rwhen','rtm'].some(c=>cl.contains(c))){const r=S.recurring.find(x=>x.id===e.target.dataset.id),v=e.target.value;let a={id:r.id};
@@ -1302,7 +1312,7 @@ document.addEventListener('submit',e=>{
  if(k==='wreq'){const r=S.reqs.find(x=>x.id===f.dataset.id);const pid=f.p.value,d=f.d.value;if(!pid){toast(L('Elige una persona','Pick a person'),3000);return}if(!offGuard(pid,d))return;const t=addTask(pid,d,r.est,'during',r.es,r.en,'req','',r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid,date:d});op('reqAssign',{id:r.id,pid,date:d,min:r.est,when:'during',note:'',taskId:t.id});toast(L(`Asignada a ${PM[pid].name} · ${dShort(d)}`,`Assigned to ${PM[pid].name} · ${dShort(d)}`))}
  else if(k==='alloc'){const r=S.reqs.find(x=>x.id===f.dataset.id);const pid=f.p.value,d=f.d.value,m=+f.m.value||r.est,note=f.n.value.trim();if(!offGuard(pid,d))return;const t=addTask(pid,d,m,f.w.value,r.es,r.en,'req',note,r.from);t.reqId=r.id;Object.assign(r,{status:'assigned',pid,date:d});S.openTask=null;op('reqAssign',{id:r.id,pid,date:d,min:m,when:f.w.value,note,taskId:t.id});toast(L(`Asignada a ${PM[pid].name} · ${dShort(d)} · ${m} min`,`Assigned to ${PM[pid].name} · ${dShort(d)} · ${m} min`))}
  else if(k==='newreq'){const desc=f.desc.value.trim();if(!desc)return;const q={id:rid('r'),from:f.from.value.trim()||'—',team:f.team.value,pri:+f.pri.value,due:f.due.value||addDays(TODAY,3),est:+f.est.value||30,loc:f.loc.value.trim(),es:desc,en:desc,status:'new'};S.reqs.push(q);op('reqAdd',q);S.newReq=false;S.taskFilter='new';toast(L('Solicitud recibida · está en Nuevas','Request received · it\'s under New'))}
- else if(k==='quick'){const t=f.t.value.trim();if(!t)return;const pid=f.p.value,d=f.d.value;S.quick={p:pid,d,t};if(!offGuard(pid,d))return;S.quick.t='';if(pid==='ALL'){const r=addForAll(d,30,'during',t,t,'rutina');if(!r)return;toast(L('Tarea agregada','Task added')+' · '+r.length+' '+L('personas','people')+' · '+dShort(d))}else{const x=addTask(pid,d,30,'during',t,t,'rutina');op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:t,en:t,src:'rutina'});toast(L('Tarea agregada','Task added')+(pid?' · '+PM[pid].name:'')+' · '+dShort(d))}setTimeout(()=>{const i=document.getElementById('qa-t');if(i)i.focus()},0)}
+ else if(k==='quick'){const t=f.t.value.trim();if(!t)return;const pid=f.p.value,d=f.d.value,w=f.w.value,m=+f.m.value||30,tm=w==='time'?+f.tm.value:0;S.quick=qState(d);if(!offGuard(pid,d))return;S.quick.t='';if(pid==='ALL'){const r=addForAll(d,m,w,t,t,'rutina','','',tm);if(!r)return;toast(L('Tarea agregada','Task added')+' · '+r.length+' '+L('personas','people')+' · '+dShort(d))}else{const x=addTask(pid,d,m,w,t,t,'rutina');x.tm=tm;op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:t,en:t,src:'rutina',tm:x.tm});toast(L('Tarea agregada','Task added')+(pid?' · '+PM[pid].name:'')+' · '+dShort(d))}setTimeout(()=>{const i=document.getElementById('qa-t');if(i)i.focus()},0)}
  else if(k==='addtask'){const t=f.t.value.trim();if(!t)return;if(!offGuard(f.p.value,S.dayDate))return;if(f.p.value==='ALL'){const r=addForAll(S.dayDate,+f.m.value||30,f.w.value,t,t,'rutina','','',f.w.value==='time'?+f.tm.value:0);if(!r)return;toast(L('Tarea agregada','Task added')+' · '+r.length+' '+L('personas','people'))}else{const x=addTask(f.p.value,S.dayDate,+f.m.value||30,f.w.value,t,t,'rutina');x.tm=f.w.value==='time'?+f.tm.value:0;op('taskAdd',{id:x.id,date:x.date,pid:x.pid,min:x.min,when:x.when,es:t,en:t,src:'rutina',tm:x.tm});toast(L('Tarea agregada','Task added'))}}
  else if(k==='team'){const E=f.elements,id=f.dataset.p,jid=f.dataset.job,nm=E.pname.value.trim();if(!nm)return;
   const rest=[1,2,3,4,5,6].filter(w=>E['r'+w].checked);

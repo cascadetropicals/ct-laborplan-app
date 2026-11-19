@@ -362,6 +362,9 @@ input,select,textarea{border:1px solid var(--line);border-radius:8px;background:
 .dc.hi .dn small{color:var(--bad)} .dc.mid .dn small{color:var(--warn)}
 button.dc:hover{box-shadow:inset 0 0 0 2px var(--leaf)}
 .dc .chip{font-size:11px;padding:1px 6px}
+.grip{cursor:grab;user-select:none;color:var(--muted);padding:0 6px 0 0;font-size:16px;line-height:1}
+.prio{display:inline-block;min-width:22px;padding:1px 6px;margin-right:6px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:11px;font-weight:700;text-align:center}
+tr.dov td,li.dov{box-shadow:inset 0 2px 0 var(--ink)}
 .chip.pendc{background:var(--surface);color:var(--warn);outline:1px dashed var(--warn);outline-offset:-1px}
 .dc .more{font-size:11px;color:var(--muted);line-height:1.3}
 .callegend{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px;color:var(--muted)}
@@ -669,6 +672,24 @@ function truckBlock(d,ro){
   h+=`</tbody></table>`}
  return h;
 }
+function prioN(list,x,key){const g=list.filter(y=>key(y)===key(x)).sort((a,b)=>(a.sort||0)-(b.sort||0));return g.length>1?g.indexOf(x)+1:0}
+const tPrio=t=>t.pid&&t.when==='first'?prioN(S.tasks.filter(y=>y.date===t.date&&y.pid===t.pid),t,y=>y.when):0;
+const rPrio=(r,w)=>r.when==='first'?prioN(S.recurring.filter(y=>y.pid===r.pid&&y.days.includes(w)),r,y=>y.when):0;
+const prioB=n=>n?`<span class="prio" title="${L('Prioridad','Priority')}">${n}</span>`:'';
+const grip=(k,id)=>`<span class="grip" draggable="true" data-dk="${k}" data-id="${id}" title="${L('Arrastra para ordenar','Drag to reorder')}">⠿</span>`;
+function reorderTo(k,id,tid){
+ if(k==='t'){const t=S.tasks.find(x=>x.id===id),u=S.tasks.find(x=>x.id===tid);if(!t||!u||t===u||!t.pid||t.pid!==u.pid||t.date!==u.date||t.when!==u.when){toast(L('Solo puedes ordenar tareas de la misma persona y el mismo momento.','You can only reorder tasks of the same person and same "when".'),3500);return}
+  const g=S.tasks.filter(x=>x.pid===t.pid&&x.date===t.date&&x.when===t.when).sort((a,b)=>(a.sort||0)-(b.sort||0));g.splice(g.indexOf(t),1);g.splice(g.indexOf(u),0,t);
+  g.forEach((x,i)=>{if((x.sort||0)!==i+1){x.sort=i+1;op('taskUpdate',{id:x.id,sort:x.sort})}})}
+ else{const r=S.recurring.find(x=>x.id===id),u=S.recurring.find(x=>x.id===tid);if(!r||!u||r===u||r.pid!==u.pid||r.when!==u.when){toast(L('Solo puedes ordenar tareas de la misma persona y el mismo momento.','You can only reorder tasks of the same person and same "when".'),3500);return}
+  const g=S.recurring.filter(x=>x.pid===r.pid&&x.when===r.when&&(x.days.some(w=>r.days.includes(w))||x===u)).sort((a,b)=>(a.sort||0)-(b.sort||0));g.splice(g.indexOf(r),1);g.splice(g.indexOf(u),0,r);
+  g.forEach((x,i)=>{if((x.sort||0)!==i+1){x.sort=i+1;op('recUpdate',{id:x.id,sort:x.sort});regen(x)}})}
+ render()}
+let dragK=null;
+document.addEventListener('dragstart',e=>{const g=e.target.closest&&e.target.closest('.grip');if(!g)return;dragK={k:g.dataset.dk,id:g.dataset.id};e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',g.dataset.id);const row=g.closest('tr,li');if(row)e.dataTransfer.setDragImage(row,10,10)}catch(x){}});
+document.addEventListener('dragover',e=>{if(!dragK)return;const r=e.target.closest&&e.target.closest('[data-rowk]');document.querySelectorAll('.dov').forEach(x=>x.classList.remove('dov'));if(r&&r.dataset.rowk===dragK.k){e.preventDefault();r.classList.add('dov')}});
+document.addEventListener('drop',e=>{if(!dragK)return;const r=e.target.closest&&e.target.closest('[data-rowk]');const d=dragK;dragK=null;document.querySelectorAll('.dov').forEach(x=>x.classList.remove('dov'));if(r&&r.dataset.rowk===d.k){e.preventDefault();reorderTo(d.k,d.id,r.dataset.id)}});
+document.addEventListener('dragend',()=>{dragK=null;document.querySelectorAll('.dov').forEach(x=>x.classList.remove('dov'))});
 function tMove(id,dir){const t=S.tasks.find(x=>x.id===id);if(!t||!t.pid)return;
  const g=S.tasks.filter(x=>x.pid===t.pid&&x.date===t.date&&x.when===t.when).sort((a,b)=>(a.sort||0)-(b.sort||0)),i=g.indexOf(t),j=i+dir;if(j<0||j>=g.length)return;
  g.splice(i,1);g.splice(j,0,t);g.forEach((x,k)=>{if((x.sort||0)!==k+1){x.sort=k+1;op('taskUpdate',{id:x.id,sort:x.sort})}})}
@@ -706,7 +727,7 @@ function sheetView(d,st){
  h+=`<div class="scroll-x" data-keep="shtasks"><table class="sh" style="min-width:660px"><thead><tr class="shh"><th colspan="5">${L('Tareas','Tasks')}<span class="shcount">${ts.length}${unas?` · ${unas} ${L('sin persona','without a person')}`:''}</span></th></tr>
  <tr class="shc"><th>${L('Tarea','Task')}</th><th style="width:160px">${L('Cuándo','When')}</th><th style="width:84px">Min</th><th style="width:180px">${L('Persona','Person')}</th><th style="width:84px"></th></tr></thead><tbody>`;
  for(const t of ts){
-  h+=`<tr class="${t.pid?'':'unas'}"><td>${esc(title(t))}${t.src==='req'?`<small class="reqsrc">${L('Solicitud de','Request from')} ${esc(t.from)}</small>`:''}</td>
+  h+=`<tr class="${t.pid?'':'unas'}" data-rowk="t" data-id="${t.id}"><td style="white-space:nowrap">${!ro&&t.pid?grip('t',t.id):''}${prioB(tPrio(t))}${esc(title(t))}${t.src==='req'?`<small class="reqsrc">${L('Solicitud de','Request from')} ${esc(t.from)}</small>`:''}</td>
   <td><select class="tw" data-id="${t.id}" ${ro?'disabled':''} aria-label="when">${WHENS.map(w=>`<option value="${w}" ${t.when===w?'selected':''}>${whenL(w)}</option>`).join('')}</select>${t.when==='time'?timeSel('ttm',t.tm,`data-id="${t.id}" ${ro?'disabled':''}`):''}</td>
   <td><input class="tmin" type="number" min="5" step="5" value="${t.min}" data-id="${t.id}" ${ro?'disabled':''} aria-label="minutes"></td>
   <td><select class="tperson" data-id="${t.id}" ${ro?'disabled':''} aria-label="person">${personOpts(d,t.pid,'— '+L('Sin asignar','Unassigned')+' —')}</select></td>
@@ -875,19 +896,19 @@ function recEditor(){
  let h=`<p class="muted" style="margin:0">${L('Estas tareas aparecen solas en la sección Tareas de cada día. Los cambios aplican desde mañana. Las tareas de una sola vez se siguen agregando en el Plan del día.','These tasks show up on their own in each day\'s Tasks section. Changes apply from tomorrow. One-time tasks are still added in the Day plan.')}</p>`;
  h+=`<div class="scroll-x" data-keep="rec"><table class="sh rect" style="min-width:880px"><thead><tr class="shh"><th colspan="6">${L('Tareas recurrentes','Recurring tasks')}<span class="shcount">${S.recurring.length}</span></th></tr><tr class="shc"><th>${L('Tarea','Task')}</th><th style="width:300px">${L('Días','Days')}</th><th style="width:170px">${L('Persona','Person')}</th><th style="width:80px">Min</th><th style="width:150px">${L('Cuándo','When')}</th><th style="width:100px"></th></tr></thead><tbody>`;
  for(const r of S.recurring){
-  h+=`<tr><td><input class="rtitle" data-id="${r.id}" value="${esc(L(r.es,r.en))}" aria-label="task"></td><td><div class="days">${DN.map(w=>`<button class="dchip ${r.days.includes(w)?'on':''}" data-act="rday" data-id="${r.id}" data-w="${w}" aria-pressed="${r.days.includes(w)}">${dl(w)}</button>`).join('')}</div></td><td><select class="rperson" data-id="${r.id}" aria-label="person"><option value="">— ${L('Elegir cada día','Pick each day')} —</option><option value="ALL" ${r.pid==='ALL'?'selected':''}>★ ${L('Todos','Everyone')}</option>${P.map(p=>`<option value="${p.id}" ${r.pid===p.id?'selected':''}>${p.name}</option>`).join('')}</select></td><td><input class="rmin" type="number" min="5" step="5" value="${r.min}" data-id="${r.id}" aria-label="minutes"></td><td><select class="rwhen" data-id="${r.id}" aria-label="when">${WHENS.map(w=>`<option value="${w}" ${r.when===w?'selected':''}>${whenL(w)}</option>`).join('')}</select>${r.when==='time'?timeSel('rtm',r.tm,`data-id="${r.id}"`):''}</td><td style="white-space:nowrap"><button class="x" data-act="rUp" data-id="${r.id}" aria-label="up" title="${L('Subir','Move up')}">↑</button><button class="x" data-act="rDown" data-id="${r.id}" aria-label="down" title="${L('Bajar','Move down')}">↓</button><button class="x" data-act="rdel" data-id="${r.id}" aria-label="delete">×</button></td></tr>`;
+  h+=`<tr data-rowk="r" data-id="${r.id}"><td style="white-space:nowrap">${grip('r',r.id)}<input class="rtitle" style="width:calc(100% - 26px)" data-id="${r.id}" value="${esc(L(r.es,r.en))}" aria-label="task"></td><td><div class="days">${DN.map(w=>`<button class="dchip ${r.days.includes(w)?'on':''}" data-act="rday" data-id="${r.id}" data-w="${w}" aria-pressed="${r.days.includes(w)}">${dl(w)}</button>`).join('')}</div></td><td><select class="rperson" data-id="${r.id}" aria-label="person"><option value="">— ${L('Elegir cada día','Pick each day')} —</option><option value="ALL" ${r.pid==='ALL'?'selected':''}>★ ${L('Todos','Everyone')}</option>${P.map(p=>`<option value="${p.id}" ${r.pid===p.id?'selected':''}>${p.name}</option>`).join('')}</select></td><td><input class="rmin" type="number" min="5" step="5" value="${r.min}" data-id="${r.id}" aria-label="minutes"></td><td><select class="rwhen" data-id="${r.id}" aria-label="when">${WHENS.map(w=>`<option value="${w}" ${r.when===w?'selected':''}>${whenL(w)}</option>`).join('')}</select>${r.when==='time'?timeSel('rtm',r.tm,`data-id="${r.id}"`):''}</td><td style="white-space:nowrap"><button class="x" data-act="rUp" data-id="${r.id}" aria-label="up" title="${L('Subir','Move up')}">↑</button><button class="x" data-act="rDown" data-id="${r.id}" aria-label="down" title="${L('Bajar','Move down')}">↓</button><button class="x" data-act="rdel" data-id="${r.id}" aria-label="delete">×</button></td></tr>`;
  }
  h+=`</tbody></table></div>`;
  h+=`<form class="newreq" data-form="newrec"><div class="full"><b>${L('Nueva tarea recurrente','New recurring task')}</b></div><label class="full">${L('Tarea','Task')}<input id="rr-t" name="t" required placeholder="${L('Ej. Revisar extintores','e.g. Check fire extinguishers')}"></label><div class="full"><span class="muted" style="font-size:13px;font-weight:600">${L('Días','Days')}</span><div class="days">${DN.map(w=>`<label class="dchk"><input type="checkbox" id="rr-d${w}" name="d${w}" ${w<=5?'checked':''}> ${dl(w)}</label>`).join('')}</div></div><label>${L('Persona','Person')}<select id="rr-p" name="p"><option value="">— ${L('Elegir cada día','Pick each day')} —</option><option value="ALL">★ ${L('Todos','Everyone')}</option>${P.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></label><label>Min<input id="rr-m" name="m" type="number" min="5" step="5" value="30"></label><label>${L('Cuándo','When')}<select id="rr-w" name="w">${WHENS.map(w=>`<option value="${w}" ${w==='during'?'selected':''}>${whenL(w)}</option>`).join('')}</select><span class="tmpick" style="display:none">${timeSel('',480,'name="tm"')}</span></label><div class="full"><button class="btn primary">${L('Agregar tarea recurrente','Add recurring task')}</button></div></form>`;
  return h;
 }
 function recByDay(p){
- const rs=S.recurring.filter(r=>r.pid===p.id||r.pid==='ALL'),wo={first:0,during:1,end:2};
+ const rs=S.recurring.filter(r=>r.pid===p.id||r.pid==='ALL'),wo=WHEN_ORDER;
  let h=`<div class="job"><h4>${L('Tareas recurrentes','Recurring tasks')}</h4>`;
  if(!rs.length)return h+`<p class="muted" style="margin:0">—</p></div>`;
  for(const w of [1,2,3,4,5,6]){
   const l=rs.filter(r=>r.days.includes(w)).sort((a,b)=>wo[a.when]-wo[b.when]||(a.sort||0)-(b.sort||0));if(!l.length)continue;
-  h+=`<p style="margin:10px 0 2px"><b>${cap(fD(addDays('2026-10-11',w),{weekday:'long'}))}</b></p><ul>${l.map(r=>`<li>${whenMark(r.when)} ${esc(L(r.es,r.en))} <span class="muted">· ${r.min} min${r.pid==='ALL'?' · '+L('todos','everyone'):''}</span></li>`).join('')}</ul>`}
+  h+=`<p style="margin:10px 0 2px"><b>${cap(fD(addDays('2026-10-11',w),{weekday:'long'}))}</b></p><ul>${l.map(r=>`<li data-rowk="r" data-id="${r.id}">${r.pid==='ALL'?'':grip('r',r.id)}${prioB(rPrio(r,w))}${whenMark(r.when)} ${esc(L(r.es,r.en))} <span class="muted">· ${r.min} min${r.pid==='ALL'?' · '+L('todos','everyone'):''}</span></li>`).join('')}</ul>`}
  return h+`</div>`;
 }
 function jobView(job){

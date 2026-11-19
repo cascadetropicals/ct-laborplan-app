@@ -65,6 +65,7 @@ section.block{padding-block:28px}
 .seg button.on small{color:var(--leaf-ink);opacity:.8}
 .seg button:disabled{opacity:.45;cursor:not-allowed}
 select.sel{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:6px 8px}
+.qplus{width:26px;height:26px;border-radius:50%;border:1px dashed var(--muted);background:none;color:var(--ink);font-size:16px;line-height:1;cursor:pointer;margin-top:4px}.qplus:hover{background:var(--accent,#2f6f4f);color:#fff;border-style:solid}
 .linkbtn{background:none;border:0;color:var(--muted);text-decoration:underline;font-size:13px}
 
 /* app grid */
@@ -551,7 +552,7 @@ function weekTasksGrid(days){
  let h=genBar(days)+quickBar(days)+reqStrip(days)+`<div class="scroll-x" data-keep="wk"><table class="sh wk"><thead><tr class="shc"><th></th>${days.map(d=>{const st=status(d);return `<th><button class="dayhead ${d===TODAY?'today':''}" data-act="goDay" data-d="${d}"><span class="dname">${dShort(d)}</span><span class="pill st-${st}">${stLabel(st)}</span><span class="dstart">${L('Entrada','Start')} ${fT(startOf(d))}</span></button></th>`}).join('')}</tr></thead><tbody>`;
  h+=`<tr><th>${L('Fuera','Out')}</th>${days.map(d=>{const v=P.filter(p=>areaOf(p.id,d)==='VAC'),r=sat(d)?[]:P.filter(p=>areaOf(p.id,d)==='REST'),pe=P.filter(p=>pendingOn(p.id,d)&&areaOf(p.id,d)!=='VAC');return `<td><div class="outcell">${v.map(p=>`<span class="chip a-VAC">${p.name}</span>`).join('')}${r.map(p=>`<span class="chip a-REST">${p.name}</span>`).join('')}${pe.map(p=>`<span class="chip pendc">${p.name} ?</span>`).join('')}${partChips(d)}${sat(d)?`<span class="muted" style="font-size:12px">${L('Sin tarea = descansa','No task = off')}</span>`:(!v.length&&!r.length&&!pe.length&&!partChips(d)?'<span class="muted">—</span>':'')}</div></td>`}).join('')}</tr>`;
  const ts=S.tasks.filter(t=>days.includes(t.date));
- h+=`<tr class="tsum"><th>${L('Tareas','Tasks')}<button class="linkbtn" data-act="wkTasks">${S.wkTasksOpen?L('Ocultar lista','Hide list'):L('Ver todas','Show all')}</button></th>${days.map(d=>{const dt=ts.filter(t=>t.date===d),un=dt.filter(t=>!t.pid),mins=dt.reduce((a,t)=>a+t.min,0);if(!dt.length)return'<td><span class="muted">—</span></td>';return `<td><div class="tcount"><b>${dt.length}</b> ${L('tareas','tasks')} · ${Math.round(mins/60*10)/10} h</div>${un.length&&!ro(d)?`<div class="unlist">${un.map(t=>`<div class="unitem"><span>${esc(title(t))}</span><select class="tperson wsel unas" data-id="${t.id}" aria-label="person"><option value="">— ${L('Elegir persona','Pick a person')} —</option>${personOpts(d,'','',true).replace('<option value=""></option>','')}</select></div>`).join('')}</div>`:(un.length?'':`<span class="lv-good" style="font-size:12px">✓ ${L('Todas con persona','All assigned')}</span>`)}</td>`}).join('')}</tr>`;
+ h+=`<tr class="tsum"><th>${L('Tareas','Tasks')}<button class="linkbtn" data-act="wkTasks">${S.wkTasksOpen?L('Ocultar lista','Hide list'):L('Ver todas','Show all')}</button></th>${days.map(d=>{const dt=ts.filter(t=>t.date===d),un=dt.filter(t=>!t.pid),mins=dt.reduce((a,t)=>a+t.min,0);const plus=ro(d)?'':`<button class="qplus" data-act="qaDay" data-d="${d}" title="${L('Agregar tarea','Add task')}" aria-label="${L('Agregar tarea','Add task')} ${dShort(d)}">+</button>`;if(!dt.length)return `<td><span class="muted">—</span> ${plus}</td>`;return `<td><div class="tcount"><b>${dt.length}</b> ${L('tareas','tasks')} · ${Math.round(mins/60*10)/10} h</div>${un.length&&!ro(d)?`<div class="unlist">${un.map(t=>`<div class="unitem"><span>${esc(title(t))}</span><select class="tperson wsel unas" data-id="${t.id}" aria-label="person"><option value="">— ${L('Elegir persona','Pick a person')} —</option>${personOpts(d,'','',true).replace('<option value=""></option>','')}</select></div>`).join('')}</div>`:(un.length?'':`<span class="lv-good" style="font-size:12px">✓ ${L('Todas con persona','All assigned')}</span>`)} ${plus}</td>`}).join('')}</tr>`;
  if(S.wkTasksOpen){
   const order=[],seen=new Set();
   S.recurring.forEach(r=>{if(!seen.has(r.es)){seen.add(r.es);order.push(r.es)}});
@@ -1196,6 +1197,7 @@ function render(){
  const st=document.getElementById('stage');st.className=mode?'is-'+mode:'';st.innerHTML=inner;
  document.querySelectorAll('[data-keep]').forEach(el=>{const k=keep[el.dataset.keep];if(k){el.scrollLeft=k[0];el.scrollTop=k[1]}});
  rMenu();
+ if(S.qaFocus){S.qaFocus=0;const i=document.getElementById('qa-t');if(i){i.scrollIntoView({block:'center',behavior:'smooth'});i.focus({preventScroll:true})}}
  document.getElementById('toast').innerHTML=S.toast?`<div class="toast" role="status">${S.toast}</div>`:'';
  const pi=document.getElementById('pinIn');if(pi&&!S.login.wait)pi.focus();
 }
@@ -1241,6 +1243,7 @@ const ACT={
  calToday:()=>{S.calMonth=TODAY.slice(0,7)},
  wview:ds=>{S.weekView=ds.v},
  wkTasks:()=>{S.wkTasksOpen=!S.wkTasksOpen},
+ qaDay:ds=>{const q=S.quick||{};S.quick={p:q.p||'',d:ds.d,t:q.t||''};S.qaFocus=1},
  teamTab:ds=>{S.teamTab=ds.v},
  tUp:ds=>{tMove(ds.id,-1)},
  tDown:ds=>{tMove(ds.id,1)},

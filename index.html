@@ -571,6 +571,10 @@ function weekTasksGrid(days){
  const areaSec=(a,label,n,sub)=>{
   let s=sub?`<tr class="shc"><th colspan="8">${chip(a)} ${label}</th></tr>`:sec(`${chip(a)} ${label}`);
   const so=d=>a==='COUNT'?dow(d)!==6:sat(d);
+  if(a==='COUNT'){
+   s+=`<tr><th>${L('Conteo','Count')}</th>${days.map(d=>{if(dow(d)!==6)return '<td><span class="muted">—</span></td>';const u=areaUnits(d,a),need=areaNeed(d,a);let inf='';if(u!=null)inf+=`<b>${n0(u)}</b> ${L('unidades','units')}`;if(need!=null&&need>0){const e=estEnd(d,a),lv=level(d,a);inf+=` · <span class="lv-${lv}"><b>${e?fT(e):L('Sin equipo','No crew')}</b></span>`}const cr=crew(d,a),k=cr.length+(ro(d)?0:1);let sl='';for(let i=0;i<Math.max(k,1);i++){const p=cr[i];sl+=`<select class="slot wsel" data-a="${a}" data-d="${d}" data-cur="${p?p.id:''}" ${ro(d)?'disabled':''} aria-label="${aS(a)} ${i+1}" style="margin-top:4px">${slotOpts(d,a,p?p.id:'')}</select>`}return `<td>${inf?`<div class="tcount">${inf}</div>`:''}${sl}</td>`}).join('')}</tr>`;
+   return s;
+  }
   if(a==='OF'||a==='REC'||a==='COUNT'){
    s+=`<tr><th>${L('Unidades','Units')}</th>${days.map(d=>{const u=areaUnits(d,a);return `<td>${so(d)?'':u!=null?'<b>'+n0(u)+'</b>':'<span class="muted">—</span>'}</td>`}).join('')}</tr>`;
    if(a==='OF'){const sp=d=>(META[d]||{}).split,cell=f=>days.map(d=>{const x=sp(d);return `<td>${sat(d)||!x?'':f(x)}</td>`}).join('');

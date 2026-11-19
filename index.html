@@ -570,7 +570,7 @@ function weekTasksGrid(days){
  }
  const areaSec=(a,label,n,sub)=>{
   let s=sub?`<tr class="shc"><th colspan="8">${chip(a)} ${label}</th></tr>`:sec(`${chip(a)} ${label}`);
-  const so=d=>sat(d)&&a!=='COUNT';
+  const so=d=>a==='COUNT'?dow(d)!==6:sat(d);
   if(a==='OF'||a==='REC'||a==='COUNT'){
    s+=`<tr><th>${L('Unidades','Units')}</th>${days.map(d=>{const u=areaUnits(d,a);return `<td>${so(d)?'':u!=null?'<b>'+n0(u)+'</b>':'<span class="muted">—</span>'}</td>`}).join('')}</tr>`;
    if(a==='OF'){const sp=d=>(META[d]||{}).split,cell=f=>days.map(d=>{const x=sp(d);return `<td>${sat(d)||!x?'':f(x)}</td>`}).join('');
@@ -579,7 +579,7 @@ function weekTasksGrid(days){
    if(a==='REC')s+=`<tr><th>${L('Puestos camión','Truck roles')}</th>${days.map(d=>{if(sat(d))return'<td></td>';const os=trOrigins(d),rs=trRoles();return `<td>${os.map(o=>`<button class="linkbtn" data-act="goDay" data-d="${d}">${o} ${rs.filter(r=>trPeople(d,o,r.id).length).length}/${rs.length}</button>`).join(' ')}</td>`}).join('')}</tr>`;
    s+=`<tr><th>${L('Hora de fin','Target end time')}</th>${days.map(d=>{const need=so(d)?null:areaNeed(d,a);if(need==null)return'<td></td>';const e=estEnd(d,a),lv=level(d,a);return `<td class="lv-${lv}"><b>${need===0?(crewH(d,a).length?L('Sin trabajo','No work'):'—'):(e?fT(e):L('Sin equipo','No crew'))}</b></td>`}).join('')}</tr>`;
   }
-  for(let i=0;i<n;i++){s+=`<tr><th class="slotn">${i+1}</th>${days.map(d=>{if(so(d))return i===0?`<td rowspan="${n}" class="satcell">${dow(d)===0?L('Domingo: solo tareas','Sunday: tasks only'):L('Sábado: solo tareas','Saturday: tasks only')}</td>`:'';const p=(a==='WATER'?wcrew(d):crew(d,a))[i];return `<td><select class="slot wsel" data-a="${a}" data-d="${d}" data-cur="${p?p.id:''}" ${ro(d)?'disabled':''} aria-label="${aS(a)} ${i+1}">${slotOpts(d,a,p?p.id:'')}</select></td>`}).join('')}</tr>`}
+  for(let i=0;i<n;i++){s+=`<tr><th class="slotn">${i+1}</th>${days.map(d=>{if(so(d))return i===0?`<td rowspan="${n}" class="satcell">${a==='COUNT'?'<span class="muted">—</span>':dow(d)===0?L('Domingo: solo tareas','Sunday: tasks only'):L('Sábado: solo tareas','Saturday: tasks only')}</td>`:'';const p=(a==='WATER'?wcrew(d):crew(d,a))[i];return `<td><select class="slot wsel" data-a="${a}" data-d="${d}" data-cur="${p?p.id:''}" ${ro(d)?'disabled':''} aria-label="${aS(a)} ${i+1}">${slotOpts(d,a,p?p.id:'')}</select></td>`}).join('')}</tr>`}
   return s;
  };
  const nn=(a,min)=>a==='COUNT'?Math.max(min,...days.map(d=>crew(d,'COUNT').length+(ro(d)?0:1))):a==='QC'?Math.max(1,...wd.map(d=>crew(d,'QC').length)):Math.max(min,...wd.map(d=>(a==='WATER'?wcrew(d):crew(d,a)).length+(ro(d)?0:1)));
@@ -747,7 +747,7 @@ function sheetView(d,st){
  }
  if(!ro)h+=`<tr class="addrow"><td colspan="5"><form class="addtask" data-form="addtask"><input name="t" id="nt-t" placeholder="${L('Nueva tarea, ej. Soplar área de shipping','New task, e.g. Blow out the shipping area')}" required><select name="w" id="nt-w" aria-label="when">${WHENS.map(w=>`<option value="${w}" ${w==='during'?'selected':''}>${whenL(w)}</option>`).join('')}</select><span class="tmpick" style="display:none">${timeSel('',480,'name="tm"')}</span><input name="m" id="nt-m" type="number" min="5" step="5" value="30" aria-label="minutes"><select name="p" id="nt-p" aria-label="person">${personOpts(d,'','— '+L('Persona','Person')+' —')}</select><button class="btn primary sm">+ ${L('Agregar','Add')}</button></form>${newReqs.length?`<div class="pullrow"><select id="pullReq" class="sel" aria-label="request"><option value="">+ ${L('Traer una solicitud de otro equipo','Pull in a request from another team')} (${newReqs.length})</option>${newReqs.map(r=>`<option value="${r.id}">P${r.pri} · ${esc(L(r.es,r.en))} · ${r.est} min</option>`).join('')}</select></div>`:''}</td></tr>`;
  h+=`</tbody></table></div>`;
- if(tonly(d))return h+`<div class="sheet-cols3">${areaBlock(d,'COUNT',ro,2)}</div><p class="muted" style="margin:0">${dow(d)===0?L('Domingo: solo se planean tareas. Solo trabaja quien tiene Domingo activado en Equipo y puestos.','Sunday: only tasks are planned. Only people set to work Sundays in Team & jobs can be scheduled; everyone else is off.'):L('Sábado: se planean tareas y Conteo cíclico. Quien tiene una tarea o está en Conteo trabaja; los demás descansan.','Saturday: tasks and Count cycle are planned. Anyone with a task or in Count works; everyone else is off.')}</p></div>`;
+ if(tonly(d))return h+`${dow(d)===6?`<div class="sheet-cols3">${areaBlock(d,'COUNT',ro,2)}</div>`:''}<p class="muted" style="margin:0">${dow(d)===0?L('Domingo: solo se planean tareas. Solo trabaja quien tiene Domingo activado en Equipo y puestos.','Sunday: only tasks are planned. Only people set to work Sundays in Team & jobs can be scheduled; everyone else is off.'):L('Sábado: se planean tareas y Conteo cíclico. Quien tiene una tarea o está en Conteo trabaja; los demás descansan.','Saturday: tasks and Count cycle are planned. Anyone with a task or in Count works; everyone else is off.')}</p></div>`;
  h+=`<div class="sheet-cols">${areaBlock(d,'OF',ro,6)}${areaBlock(d,'REC',ro,6)}</div>`;
  const others=['WATER','COUNT'].filter(a=>a!=='COUNT'||crew(d,a).length);
  return h+`<div class="sheet-cols3">${others.map(a=>areaBlock(d,a,ro,2)).join('')}</div></div>`;

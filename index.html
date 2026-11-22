@@ -952,19 +952,24 @@ function jobView(job){
 function planCard(pid,d){
  const p=PM[pid],a=areaOf(pid,d);
  if(a==='VAC')return `<div class="offcard"><h3>${L('Estás de vacaciones','You\'re on vacation')}</h3><p>${cap(dLong(d))}</p><p class="muted">${L('¡Disfruta tu descanso!','Enjoy your time off!')}</p></div>`;
+ const wkend=[0,6].includes(dow(d));
+ if(a==='REST'&&wkend)return freeCard(d);
  if(a==='REST')return `<div class="offcard"><h3>${L('Descansas','Day off')}</h3><p>${L('No estás programado(a) para el','You\'re not scheduled for')} ${dLong(d)}.</p><p class="muted">${L('¿Quieres usar PTO o Sick? Pídelo en Paylocity o con Jeremy.','Want to use PTO or Sick time? Request it in Paylocity or through Jeremy.')}</p></div>`;
  const ts=dayTasks(pid,d),early=ts.some(t=>/Jail/.test(t.es)),units=areaUnits(d,a),e=estEnd(d,a);
+ if(!ts.length&&(a==='TASKS'||(a==='NONE'&&wkend)))return freeCard(d);
  const sec=(w,lbl)=>{const l=ts.filter(t=>t.when===w);return l.length?`<div class="tsec"><h4>${lbl}</h4>${l.map(taskBtn).join('')}</div>`:''};
  return `<div class="plan"><div class="plan-date">${dLong(d)}</div>
  ${META[d]&&META[d].note&&isPub(d)?`<div class="callout" style="background:var(--surface-2);border-color:var(--line)"><div><b>${L('Nota del día','Day note')}: ${L(META[d].note[0],META[d].note[1])}</b></div></div>`:''}
  <div class="arrive"><span>${L('Entrada','Start')}</span><b>${fT(early?startOf(d)-30:startOf(d))}</b>${early?`<small>${L('30 min antes por Jail y Banderas Blancas','30 min early for Jail & white flags')}</small>`:''}</div>
  <div class="band a-${a}"><small>${L('Te toca','You\'re on')}</small><b>${aL(a)}</b><span>${L('Repórtate con','Report to')} ${reportTo(p,a)}</span></div>
+ ${partOf(pid,d).map(o=>`<div class="callout" style="background:var(--surface-2);border-color:var(--line)"><div><b>${o.type==='early'?L('Sales temprano a las ','You leave early at ')+fT(o.tm):o.type==='late'?L('Entras tarde a las ','You come in late at ')+fT(o.tm):L('Cita','Appointment')+(o.tm?' · '+fT(o.tm):'')}</b>${o.note?` · ${esc(o.note)}`:''}</div></div>`).join('')}
  ${trLine(pid,d)}
  ${units?`<div class="goal">${L('Meta del equipo','Crew goal')}: <b>${n0(units)} ${L('unidades','units')}</b>${e?` · ${L('terminar','finish')} ~<b>${fT(e)}</b>`:''}${a==='REC'&&META[d]&&META[d].from?` · ${L('llega','from')} ${META[d].from}`:''}</div>`:''}
  ${sec('first',L('Primero','First thing'))}${sec('time',L('A una hora exacta','At a set time'))}${sec('during',L('Durante el día','During the day'))}${sec('end',L('Antes de salir','Before you leave'))}
  ${!ts.length?`<p class="muted">${L('Hoy solo trabajo de tu área.','Just your area\'s work today.')}</p>`:''}
  <p class="fine">${L('Este plan puede cambiar en la mañana. Maria o Isabel te avisarán.','This plan may change in the morning. Maria or Isabel will let you know.')}</p></div>`;
 }
+function freeCard(d){const we=[0,6].includes(dow(d)),now=d===TODAY;return `<div class="offcard free"><h3>${now?L('Hoy no hay trabajo','No work today'):L('Mañana no hay trabajo','No work tomorrow')}</h3><p>${cap(dLong(d))}</p><p class="muted">${we?L('¡Disfruta tu fin de semana!','Enjoy your weekend!'):L('Si algo cambia, Maria o Isabel te avisarán.','If anything changes, Maria or Isabel will let you know.')}</p></div>`}
 function taskBtn(t){return `<button class="task ${t.done?'done':''}" data-act="toggleTask" data-id="${t.id}"><span class="box"></span><span class="tt">${esc(title(t))}${t.src==='req'?`<small>${L('Solicitud de','Request from')} ${esc(t.from)}${t.note?' · '+esc(t.note):''}</small>`:''}</span><span class="tm">${t.when==='time'?fT(t.tm||480)+' · ':''}${t.min} min</span></button>`}
 function offForm(pid){
  const mine=S.off.filter(o=>o.pid===pid).sort((a,b)=>b.start.localeCompare(a.start));
@@ -985,7 +990,7 @@ function rMember(pid){
  const p=PM[pid],tab=S.memTab;
  let body='';
  if(tab==='today')body=planCard(pid,TODAY);
- else if(tab==='tomorrow')body=isPub(NEXT)?planCard(pid,NEXT):lockCard();
+ else if(tab==='tomorrow')body=(isPub(NEXT)||([0,6].includes(dow(NEXT))&&['REST','NONE'].includes(areaOf(pid,NEXT))&&!dayTasks(pid,NEXT).length))?planCard(pid,NEXT):lockCard();
  else if(tab==='off')body=offForm(pid);
  else body=`<div class="card">${jobView(p.job)}</div>`;
  return `<div class="appbar"><small>${L('Hola','Hi')}, ${p.name}</small><h3>${({today:L('Mi plan de hoy','My plan today'),tomorrow:L('Mañana','Tomorrow'),off:L('Tiempo libre','Time off'),job:L('Mi puesto','My job')})[tab]}</h3></div><div class="scr" data-keep="scr">${body}</div>${tabbar([['today',L('Hoy','Today'),'today'],['tomorrow',L('Mañana','Tomorrow'),'tomorrow'],['off',L('Libre','Time off'),'off'],['job',L('Puesto','My job'),'job']],tab,'memTab')}`;

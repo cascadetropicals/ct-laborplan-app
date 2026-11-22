@@ -827,7 +827,7 @@ function mTasks(){
  h+=`<p class="muted" style="margin:0">${L('Solicitudes de otros equipos. Asigna cada una a una persona, un día y los minutos que puede usar. Aparece en su plan cuando se publica el día.','Requests from other teams. Assign each one to a person, a day and the minutes they can spend. It shows up in their plan when that day is published.')}</p><div class="reqs">`;
  for(const r of list){
   h+=`<div class="req"><div class="pri pri${r.pri}" title="Priority">P${r.pri}</div><div><h4>${esc(L(r.es,r.en))}</h4><div class="meta"><span>${L('De','From')}: <b>${esc(r.from)}</b> · ${esc(r.team)}</span><span>${L('Dónde','Where')}: ${esc(r.loc||'—')}</span><span>${L('Para','Due')}: <b>${dMD(r.due)}</b></span><span>${L('Estimado','Estimate')}: ${r.est} min</span></div>${rDone(r)?`<div class="warns"><span class="w good">✓ ${L('Completada','Completed')} · ${r.pid?PM[r.pid].name:''} · ${dShort(r.date)}</span></div>`:r.status==='assigned'?`<div class="warns"><span class="w good">${L('Asignada a','Assigned to')} ${r.pid?PM[r.pid].name:L('(sin persona)','(no person yet)')} · ${dShort(r.date)}</span></div>`:''}</div>
-  <div>${r.status==='new'?`<button class="btn ${S.openTask===r.id?'':'primary'} sm" data-act="openTask" data-id="${r.id}">${S.openTask===r.id?L('Cancelar','Cancel'):L('Asignar','Assign')}</button>`:`<button class="btn sm ghost" data-act="unassign" data-id="${r.id}">${L('Reasignar','Reassign')}</button>`}</div>
+  <div>${r.status==='new'?`<button class="btn ${S.openTask===r.id?'':'primary'} sm" data-act="openTask" data-id="${r.id}">${S.openTask===r.id?L('Cancelar','Cancel'):L('Asignar','Assign')}</button>`:`${rDone(r)?`<button class="btn sm ghost" data-act="reqDone" data-id="${r.id}">${L('Reabrir','Reopen')}</button>`:`<button class="btn sm primary" data-act="reqDone" data-id="${r.id}">${L('Marcar hecha','Mark done')}</button> <button class="btn sm ghost" data-act="unassign" data-id="${r.id}">${L('Reasignar','Reassign')}</button>`}`}</div>
   ${S.openTask===r.id?allocForm(r):''}</div>`;
  }
  if(!list.length)h+=`<p class="muted">${L('No hay solicitudes aquí.','No requests here.')}</p>`;
@@ -1259,6 +1259,7 @@ const ACT={
  teamSel:ds=>{S.teamSel=ds.p;S.teamEdit=false},
  teamEdit:()=>{S.teamEdit=!S.teamEdit},
  toast:ds=>toast(ds.msg),
+ reqDone:ds=>{const t=S.tasks.find(x=>x.reqId===ds.id);if(t){t.done=!t.done;op('taskToggle',{id:t.id,done:t.done})}},
  toggleTask:ds=>{const t=S.tasks.find(x=>x.id===ds.id);if(t){t.done=!t.done;op('taskToggle',{id:t.id,done:t.done})}},
  memTab:ds=>{S.memTab=ds.v},
  leadTab:ds=>{S.leadTab[S.pid]=ds.v},

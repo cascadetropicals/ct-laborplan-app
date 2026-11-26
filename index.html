@@ -424,6 +424,8 @@ body{font-size:15px}
 #bar .brand small{opacity:.75;font-size:12px}
 #bar .barr{display:flex;align-items:center;gap:10px}
 .barlink{color:#fff!important;opacity:.85}
+@media (max-width:520px){.fbbar{display:none}}
+@media (min-width:521px){.fbphone{display:none}}
 .sync{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.12)}
 .sync.save{background:var(--warn-bg);color:var(--warn)} .sync.off{background:var(--bad-bg);color:var(--bad)}
 #stage{flex:1;padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left));min-width:0}
@@ -447,9 +449,31 @@ body{font-size:15px}
 .bubble .btn{margin-top:6px}
 @media(max-width:700px){.mbody{padding:12px 10px}}
 
+/* feedback popup: uses only the app's own variables */
+#fb:empty{display:none}
+.fbwrap{position:fixed;z-index:55;right:16px;bottom:16px;width:min(380px,calc(100vw - 32px))}
+.fbcard{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 30px -12px rgba(0,0,0,.4);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.fbtop{display:flex;justify-content:space-between;align-items:center;min-height:24px}
+.fbstep{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fbx{border:0;background:none;color:var(--muted);font-size:26px;line-height:1;width:44px;height:44px;margin:-10px -12px -10px 0}
+.fbq{font-family:var(--display);font-size:24px;font-weight:700;line-height:1.1;margin:0}
+.fbscale{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.fbs{min-height:48px;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;font-family:var(--display);font-size:22px;font-weight:700}
+.fbs.on{background:var(--leaf);color:var(--leaf-ink);border-color:var(--leaf)}
+.fbends{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);font-weight:600}
+.fbpick{font-size:14px;font-weight:700}
+.fbadd{min-height:36px;text-align:left;align-self:flex-start}
+.fbcard textarea{resize:vertical}
+.fbcount{font-size:12px;color:var(--muted);text-align:right}
+.fbfoot{display:flex;justify-content:space-between;gap:8px}
+.fbfoot .btn{min-height:44px}
+.fbe{background:var(--bad-bg);color:var(--bad);font-weight:700;font-size:13px;border-radius:8px;padding:6px 10px}
+.fbthx{font-family:var(--display);font-size:24px;font-weight:700;padding:10px 0}
+@media (max-width:560px){.fbwrap{left:0;right:0;bottom:0;width:100%}.fbcard{border-radius:16px 16px 0 0;border-bottom:0;padding-bottom:max(14px,env(safe-area-inset-bottom))}}
+@media (prefers-reduced-motion:no-preference){.fbcard{animation:fbup .2s ease-out}@keyframes fbup{from{opacity:0;transform:translateY(12px)}}}
 </style></head><body>
 <div id="app"><header id="bar"></header><main id="stage"></main></div>
-<div id="menu"></div><div id="toast"></div>
+<div id="menu"></div><div id="toast"></div><div id="fb"></div>
 <script>
 (function(){
 'use strict';
@@ -1021,7 +1045,7 @@ function rLead(pid){
  } else if(tab==='off')body=offForm(pid);
  else body=`<div class="card">${jobView(p.job)}</div>`;
  const head={team:L('Mi equipo','My crew'),mine:L('Mi plan de hoy','My plan today'),week:L('Semana del equipo','Crew week'),off:L('Tiempo libre','Time off'),job:L('Mi puesto','My job')}[tab];
- return `<div class="appbar"><small>${p.name} · ${roleLabel(p)}</small><h3>${head}</h3></div><div class="scr" data-keep="scr">${body}</div>${tabbar([['team',L('Equipo','Crew'),'team'],['mine',L('Mi plan','My plan'),'mine'],['week',L('Semana','Week'),'week'],['off',L('Libre','Off'),'off'],['job',L('Puesto','Job'),'job']],tab,'leadTab')}`;
+ return `<div class="appbar"><small>${p.name} · ${roleLabel(p)}</small><h3>${head}</h3></div><div class="scr" data-keep="scr">${body}<button class="linkbtn fbadd fbphone" data-act="fbOpen">${L('Dar opinión sobre la app','Give feedback on the app')}</button></div>${tabbar([['team',L('Equipo','Crew'),'team'],['mine',L('Mi plan','My plan'),'mine'],['week',L('Semana','Week'),'week'],['off',L('Libre','Off'),'off'],['job',L('Puesto','Job'),'job']],tab,'leadTab')}`;
 }
 
 /* ---------- KIOSK ---------- */
@@ -1132,7 +1156,7 @@ function pump(){
   if(r&&r.ok){Q.shift();
    if(r.state){applyState(r.state);render()}
    else if(r.version&&verN(r.version)===verN(S.version)+1)S.version=r.version;
-   setSync();pump();
+   setSync();pump();fbArm();
   }else{
    Q.length=0;setSync();
    if(r&&(r.error==='bad_pin'||r.error==='locked'))return logout();
@@ -1162,7 +1186,7 @@ function startPolling(){
 function startApp(st){
  applyState(st);
  try{if(S.role==='kiosk'){const l=localStorage.getItem('pdd_lang');S.lang=(l==='en'||l==='es')?l:st.me.language}else S.lang=st.me.language}catch(e){S.lang=st.me.language}
- S.screen='app';S.mTab='week';S.memTab='today';S.kDay='today';S.kioskPerson=null;
+ S.screen='app';S.mTab='week';S.memTab='today';S.kDay='today';S.kioskPerson=null;S.fbT0=Date.now();fbDay();
  startPolling();render();
 }
 function logout(){
@@ -1215,7 +1239,7 @@ function roleName(){const m=S.me;if(!m)return'';return {manager:L('Gerente','Man
 function renderBar(){
  const b=document.getElementById('bar');
  if(S.screen!=='app'){b.innerHTML=`<div class="brand"><b>Plan del Día</b><small>Cascade Tropicals</small></div>`;return}
- b.innerHTML=`<div class="brand"><b>Plan del Día</b><small>${S.role==='kiosk'?roleName():esc(S.me.name)+' · '+roleName()}</small></div><div class="barr"><span id="sync" class="sync ${S.sync}">✓</span><div class="seg"><button class="${S.lang==='es'?'on':''}" data-act="lang" data-v="es">ES</button><button class="${S.lang==='en'?'on':''}" data-act="lang" data-v="en">EN</button></div><button class="linkbtn barlink" data-act="logout">${L('Salir','Sign out')}</button></div>`;
+ b.innerHTML=`<div class="brand"><b>Plan del Día</b><small>${S.role==='kiosk'?roleName():esc(S.me.name)+' · '+roleName()}</small></div><div class="barr"><span id="sync" class="sync ${S.sync}">✓</span><div class="seg"><button class="${S.lang==='es'?'on':''}" data-act="lang" data-v="es">ES</button><button class="${S.lang==='en'?'on':''}" data-act="lang" data-v="en">EN</button></div>${/^(manager|lead)$/.test(S.role)?`<button class="linkbtn barlink fbbar" data-act="fbOpen">${L('Opinión','Feedback')}</button>`:''}<button class="linkbtn barlink" data-act="logout">${L('Salir','Sign out')}</button></div>`;
  setSync();
 }
 function render(){
@@ -1239,8 +1263,126 @@ function copyText(t){
  if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(t);
  return new Promise((ok,bad)=>{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy')?ok():bad()}catch(e){bad()}a.remove()});
 }
+/* ---------- FEEDBACK (monthly popup for managers and leads) ---------- */
+// Questions and texts live here. Answers are sent with the 'feedback' op and stored in the FEEDBACK tab.
+const FB={
+ VER:'2026-11-26',   // app version written with each answer
+ MIN_DAYS:3,         // days of use before the first popup
+ COOLDOWN:30,        // days between popups after an answer (and after two "Not now")
+ SNOOZE:7,           // days until the next popup after one "Not now"
+ MAX_DISMISS:2,      // "Not now" count before skipping the whole month
+ DELAY:7000,         // ms after a finished task or screen change before the popup may appear
+ SETTLE:20000,       // ms after opening the app before any popup may appear
+ MAX:500             // max characters in a note
+};
+const FBQ=[
+ {k:'q1',n:'n1',es:'La app es fácil de usar.',en:'The app is easy to use.'},
+ {k:'q2',n:'n2',es:'La app me ayuda a hacer mi trabajo.',en:'The app helps me do my work.'}
+];
+const FBT={es:'¿Hay algo que te moleste o alguna sugerencia para mejorar la app? (opcional)',en:'Is there anything that annoys you, or any suggestion to improve the app? (optional)'};
+const fbScale=()=>[L('Muy en desacuerdo','Strongly disagree'),L('En desacuerdo','Disagree'),L('Neutral','Neutral'),L('De acuerdo','Agree'),L('Muy de acuerdo','Strongly agree')];
+const fbGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const fbSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+const fbDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
+function fbDay(){
+ if(!S.me||!/^(manager|lead)$/.test(S.role)||!TODAY)return;
+ let d=[];try{d=JSON.parse(fbGet('pdd_fb_days')||'[]')}catch(e){}
+ if(!Array.isArray(d))d=[];
+ if(!d.includes(TODAY)){d.push(TODAY);fbSet('pdd_fb_days',JSON.stringify(d.slice(-10)))}
+}
+function fbOk(){
+ if(S.screen!=='app'||!S.me||!/^(manager|lead)$/.test(S.role))return false;
+ let d=[];try{d=JSON.parse(fbGet('pdd_fb_days')||'[]')}catch(e){}
+ if(!Array.isArray(d)||d.length<FB.MIN_DAYS)return false;
+ const a=fbGet('pdd_fb_answered');if(a&&fbDiff(a,TODAY)<FB.COOLDOWN)return false;
+ const z=fbGet('pdd_fb_snooze');if(z&&TODAY<z)return false;
+ return true;
+}
+let fbTm=null;
+function fbArm(){if(S.fbShown||S.fb||fbTm||!fbOk())return;fbTm=setTimeout(()=>{fbTm=null;fbTry()},FB.DELAY)}
+function fbTry(){
+ if(S.fbShown||S.fb||!fbOk())return;
+ const ae=document.activeElement;
+ if(Date.now()-(S.fbT0||0)<FB.SETTLE||busy||Q.length||S.menu||S.toast||document.hidden||(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName)))return;
+ fbOpen(false);
+}
+function fbOpen(manual){
+ if(S.fb||!S.me||!/^(manager|lead)$/.test(S.role))return;
+ S.fb={step:0,q1:'',q2:'',n1:'',n2:'',t3:'',open1:false,open2:false,sending:false,err:false,done:false,manual:!!manual};
+ S.fbShown=true;S.fbPrev=document.activeElement;fbDraw('.fbs');
+}
+function fbClose(){
+ S.fb=null;const el=document.getElementById('fb');if(el)el.innerHTML='';
+ const p=S.fbPrev;S.fbPrev=null;try{if(p&&p.focus&&document.contains(p))p.focus({preventScroll:true})}catch(e){}
+}
+function fbDismiss(){
+ const f=S.fb;if(!f)return;
+ if(!f.manual&&!f.done){
+  const n=(+fbGet('pdd_fb_dismiss')||0)+1;
+  if(n>=FB.MAX_DISMISS){fbSet('pdd_fb_snooze',addDays(TODAY,FB.COOLDOWN));fbSet('pdd_fb_dismiss','0')}
+  else{fbSet('pdd_fb_snooze',addDays(TODAY,FB.SNOOZE));fbSet('pdd_fb_dismiss',String(n))}
+ }
+ fbClose();
+}
+function fbDraw(focus){
+ const el=document.getElementById('fb'),f=S.fb;if(!el||!f)return;
+ const sc=fbScale();let h='';
+ if(f.done){
+  h=`<div class="fbtop"><span></span><button class="fbx" data-act="fbClose" aria-label="${L('Cerrar','Close')}">×</button></div><p class="fbthx" id="fbq" role="status">${L('Gracias. Esto nos ayuda a mejorar la app.','Thank you. This helps us improve the app.')}</p>`;
+ }else{
+  const st=f.step,last=st===2,q=FBQ[st];
+  h=`<div class="fbtop"><span class="fbstep">${st+1} / 3</span><button class="fbx" data-act="fbClose" aria-label="${L('Cerrar','Close')}">×</button></div>`;
+  if(!last){
+   const v=f[q.k];
+   h+=`<p class="fbq" id="fbq">${L(q.es,q.en)}</p><div class="fbscale" role="group" aria-labelledby="fbq">${[1,2,3,4,5].map(n=>`<button class="fbs ${+v===n?'on':''}" data-act="fbSel" data-v="${n}" aria-pressed="${+v===n}" aria-label="${n} ${esc(sc[n-1])}">${n}</button>`).join('')}</div>`;
+   h+=v?`<div class="fbpick">${v} · ${esc(sc[v-1])}</div>`:`<div class="fbends"><span>${esc(sc[0])}</span><span>${esc(sc[4])}</span></div>`;
+   h+=f['open'+(st+1)]?`<textarea id="fbn" rows="2" maxlength="${FB.MAX}" data-fb="${q.n}" aria-label="${L('Nota','Note')}">${esc(f[q.n])}</textarea>`:`<button class="linkbtn fbadd" data-act="fbNote">${L('+ Agregar una nota','+ Add a note')}</button>`;
+   h+=`<div class="fbfoot"><button class="btn" data-act="fbClose">${L('Ahora no','Not now')}</button><button class="btn primary" data-act="fbNext">${L('Siguiente','Next')}</button></div>`;
+  }else{
+   h+=`<p class="fbq" id="fbq">${L(FBT.es,FBT.en)}</p><textarea id="fbt" rows="4" maxlength="${FB.MAX}" data-fb="t3" aria-labelledby="fbq">${esc(f.t3)}</textarea><div class="fbcount" id="fbc">${f.t3.length} / ${FB.MAX}</div>`;
+   if(f.err)h+=`<div class="fbe" role="alert">${L('No se pudo enviar. Intenta de nuevo.','Could not send. Try again.')}</div>`;
+   h+=`<div class="fbfoot"><button class="btn" data-act="fbSkip" ${f.sending?'disabled':''}>${L('Omitir','Skip')}</button><button class="btn primary" data-act="fbSend" ${f.sending||!fbAny()?'disabled':''}>${f.sending?L('Enviando…','Sending…'):L('Enviar','Send')}</button></div>`;
+  }
+ }
+ el.innerHTML=`<div class="fbwrap"><div class="fbcard" role="dialog" aria-modal="true" aria-labelledby="fbq">${h}</div></div>`;
+ if(focus){const t=el.querySelector(focus==='.fbs'?'.fbs.on, .fbs':focus);if(t)t.focus({preventScroll:true})}
+}
+const fbAny=()=>{const f=S.fb;return !!(f&&(f.q1||f.q2||f.n1.trim()||f.n2.trim()||f.t3.trim()))};
+function fbSend(){
+ const f=S.fb;if(!f||f.sending||!fbAny()||!CRED)return;
+ f.sending=true;f.err=false;fbDraw('[data-act=fbSend]');
+ run('pddApi',[CRED.pid,CRED.pin,'feedback',JSON.stringify({q1:f.q1,q2:f.q2,n1:f.n1,n2:f.n2,t3:f.t3,lang:S.lang,ver:FB.VER})]).then(r=>{
+  if(!S.fb)return;f.sending=false;
+  if(r&&r.ok){fbSet('pdd_fb_answered',TODAY);fbSet('pdd_fb_dismiss','0');f.done=true;fbDraw('.fbx');setTimeout(()=>{if(S.fb&&S.fb.done)fbClose()},3000)}
+  else{f.err=true;fbDraw('[data-act=fbSend]')}
+ }).catch(()=>{if(!S.fb)return;f.sending=false;f.err=true;fbDraw('[data-act=fbSend]')});
+}
+document.addEventListener('input',e=>{
+ const t=e.target;if(!S.fb||!t.dataset||!t.dataset.fb)return;
+ S.fb[t.dataset.fb]=t.value.slice(0,FB.MAX);
+ const c=document.getElementById('fbc');if(c)c.textContent=S.fb.t3.length+' / '+FB.MAX;
+ const b=document.querySelector('#fb [data-act=fbSend]');if(b)b.disabled=S.fb.sending||!fbAny();
+});
+document.addEventListener('keydown',e=>{
+ if(!S.fb)return;
+ if(e.key==='Escape'){e.preventDefault();fbDismiss();return}
+ if(e.key==='Tab'){
+  const c=document.querySelector('#fb .fbcard');if(!c)return;
+  const f=[...c.querySelectorAll('button:not([disabled]),textarea')];if(!f.length)return;
+  const a=document.activeElement,i=f.indexOf(a);
+  if(e.shiftKey&&(i<=0)){e.preventDefault();f[f.length-1].focus()}
+  else if(!e.shiftKey&&(i===f.length-1||i<0)){e.preventDefault();f[0].focus()}
+ }
+});
 const ACT={
- lang:ds=>{S.lang=ds.v;try{localStorage.setItem('pdd_lang',ds.v)}catch(e){}if(S.screen==='app'&&S.role!=='kiosk')op('lang',{lang:ds.v})},
+ lang:ds=>{S.lang=ds.v;try{localStorage.setItem('pdd_lang',ds.v)}catch(e){}if(S.screen==='app'&&S.role!=='kiosk')op('lang',{lang:ds.v});if(S.fb)fbDraw()},
+ fbOpen:()=>fbOpen(true),
+ fbClose:()=>fbDismiss(),
+ fbSel:ds=>{const f=S.fb;if(!f)return;const k=FBQ[f.step].k;f[k]=String(f[k])===ds.v?'':ds.v;fbDraw(f[k]?'.fbs.on':'.fbs')},
+ fbNote:()=>{const f=S.fb;if(!f)return;f['open'+(f.step+1)]=true;fbDraw('#fbn')},
+ fbNext:()=>{const f=S.fb;if(!f)return;f.step++;fbDraw(f.step===2?'#fbt':'.fbs')},
+ fbSkip:()=>{const f=S.fb;if(!f)return;if(fbAny())fbSend();else fbDismiss()},
+ fbSend:()=>fbSend(),
  logout:()=>logout(),
  retry:()=>{S.screen='boot';render();boot()},
  pick:ds=>{S.login.sel=ds.id;S.login.err=''},
@@ -1301,6 +1443,7 @@ document.addEventListener('click',e=>{
  const a=el.dataset.act;if(!ACT[a])return;
  if(a!=='cell'&&a!=='setArea'&&S.menu&&!el.closest('.menu'))S.menu=null;
  ACT[a](el.dataset,el,e);render();
+ if(a==='mtab'||a==='leadTab'||a==='leadDay'||a==='memTab')fbArm();
 });
 document.addEventListener('change',e=>{
  const id=e.target.id,cl=e.target.classList;
